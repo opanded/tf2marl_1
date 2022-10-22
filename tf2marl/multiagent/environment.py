@@ -19,7 +19,7 @@ class MultiAgentEnv(gym.Env):
         self.agents = self.world.policy_agents
         # set required vectorized gym env property
         self.n = len(world.policy_agents)
-        self.n_adversaries = world.n_adversaries
+        self.n_adversaries = 0
         # scenario callbacks
         self.reset_callback = reset_callback
         self.reward_callback = reward_callback
@@ -27,7 +27,7 @@ class MultiAgentEnv(gym.Env):
         self.info_callback = info_callback
         self.done_callback = done_callback
         # environment parameters
-        self.discrete_action_space = True
+        self.discrete_action_space = False
         # if true, action is a number 0...N, otherwise action is a one-hot N-dimensional vector
         self.discrete_action_input = False
         # if true, even the action is continuous, action will be performed discretely
@@ -36,6 +36,8 @@ class MultiAgentEnv(gym.Env):
         self.shared_reward = world.collaborative if hasattr(world, 'collaborative') else False
         self.time = 0
 
+        # 報酬のリスト
+        self.reward_list_all = []
         # configure spaces
         self.action_space = []
         self.observation_space = []
@@ -83,6 +85,7 @@ class MultiAgentEnv(gym.Env):
         reward_n = []
         done_n = []
         info_n = {'n': []}
+        is_first = True
         self.agents = self.world.policy_agents
         # set action for each agent
         for i, agent in enumerate(self.agents):
@@ -90,13 +93,19 @@ class MultiAgentEnv(gym.Env):
         # advance world state
         self.world.step()
         # record observation for each agent
-        for agent in self.agents:
+        for i, agent in enumerate(self.agents):
             obs_n.append(self._get_obs(agent))
-            reward_n.append(self._get_reward(agent))
+            # 報酬のリストを取得
+            reward, reward_list = self._get_reward(agent)
+            reward_n.append(reward) 
+            if is_first:
+                reward_list_sum = np.zeros(len(reward_list))
+                is_first = False
+            reward_list_sum += reward_list
             done_n.append(self._get_done(agent))
 
             info_n['n'].append(self._get_info(agent))
-
+        self.reward_list_all.append(np.round(reward_list_sum, decimals=2))
         # all agents get total reward in cooperative case
         reward = np.sum(reward_n)
         if self.shared_reward:
@@ -104,17 +113,18 @@ class MultiAgentEnv(gym.Env):
 
         return obs_n, reward_n, done_n, info_n
 
-    def reset(self):
+    def reset(self, is_replay_epi):
         # reset world
-        self.reset_callback(self.world)
+        self.dest, self.rho_g, self.__calc_F_COM, pos_dict = self.reset_callback(self.world, is_replay_epi)
         # reset renderer
         self._reset_render()
         # record observations for each agent
         obs_n = []
+        self.reward_list_all = []
         self.agents = self.world.policy_agents
         for agent in self.agents:
             obs_n.append(self._get_obs(agent))
-        return obs_n
+        return obs_n, pos_dict
 
     # get info used for benchmarking
     def _get_info(self, agent):
@@ -211,7 +221,7 @@ class MultiAgentEnv(gym.Env):
                     else:
                         word = alphabet[np.argmax(other.state.c)]
                     message += (other.name + ' to ' + agent.name + ': ' + word + '   ')
-            print(message)
+            # print(message)
 
         for i in range(len(self.viewers)):
             # create viewers (if necessary)
@@ -219,7 +229,7 @@ class MultiAgentEnv(gym.Env):
                 # import rendering only if we need it (and don't import for headless machines)
                 #from gym.envs.classic_control import rendering
                 from tf2marl.multiagent import rendering
-                self.viewers[i] = rendering.Viewer(700, 700)
+                self.viewers[i] = rendering.Viewer(850, 850)
 
         # create rendering geometry
         if self.render_geoms is None:
@@ -231,14 +241,39 @@ class MultiAgentEnv(gym.Env):
             for entity in self.world.entities:
                 geom = rendering.make_circle(entity.size)
                 xform = rendering.Transform()
-                if 'agent' in entity.name:
-                    geom.set_color(*entity.color)
+                if 'leader' in entity.name:
+                    geom.set_color(*entity.color, alpha=0.5)
                 else:
                     geom.set_color(*entity.color)
                 geom.add_attr(xform)
                 self.render_geoms.append(geom)
                 self.render_geoms_xform.append(xform)
+            
+            # 目的地を追加
+            geom_des = rendering.make_circle(self.rho_g)
+            geom_des.set_color(*np.array([0.5, 0.5, 0.5]), alpha=0.5) # alphaは透明度を表す
+            xform_des = rendering.Transform()
+            geom_des.add_attr(xform_des)
+            self.render_geoms.append(geom_des)
+            self.render_geoms_xform.append(xform_des)
+            # 重心を追加
+            size = 0.04
+            points = [(size, 0), (0, 1.5 * size), (-size, 0), (0, -1.5 * size)]
+            geom_COM = rendering.make_polygon(points)
+            geom_COM.set_color(*np.array([0, 0.5, 0]), alpha=1) # alphaは透明度を表す
+            xform_COM = rendering.Transform()
+            geom_COM.add_attr(xform_COM)
+            self.render_geoms.append(geom_COM)
+            self.render_geoms_xform.append(xform_COM)
 
+            # # 障害物周りのポテンシャルを追加
+            # geom_obs = rendering.make_circle(1.2)  # フォロワの値変えたら修正する
+            # xform_obs = rendering.Transform()
+            # geom_obs.set_color(*np.array([0, 0.5, 0]), alpha=0.25)
+            # geom_obs.add_attr(xform_obs)
+            # self.render_geoms.append(geom_obs)
+            # self.render_geoms_xform.append(xform_obs)
+            
             # add geoms to viewer
             for viewer in self.viewers:
                 viewer.geoms = []
@@ -248,18 +283,25 @@ class MultiAgentEnv(gym.Env):
         results = []
         for i in range(len(self.viewers)):
             # update bounds to center around agent
-            cam_range = 1
+            cam_range = 12.5 # 拡大、縮小を決める変数
             if self.shared_viewer:
                 pos = np.zeros(self.world.dim_p)
             else:
                 pos = self.agents[i].state.p_pos
-            self.viewers[i].set_bounds(pos[0]-cam_range,pos[0]+cam_range,pos[1]-cam_range,pos[1]+cam_range)
+            self.viewers[i].set_bounds(pos[0] - cam_range,pos[0] + cam_range, pos[1]-cam_range, pos[1]+ cam_range)
             # update geometry positions
             for e, entity in enumerate(self.world.entities):
                 self.render_geoms_xform[e].set_translation(*entity.state.p_pos)
+            # 目標値の更新
+            self.render_geoms_xform[len(self.world.entities)].set_translation(*self.dest)
+            # 重心の更新
+            follower_COM = self.__calc_F_COM(self.world)
+            self.render_geoms_xform[len(self.world.entities) + 1].set_translation(*follower_COM)
+            # ポテンシャルの更新
+            # pos = self.world.obstacles[0].state.p_pos
+            # self.render_geoms_xform[len(self.world.entities) + 2].set_translation(*pos)
             # render to display or array
-            results.append(self.viewers[i].render(return_rgb_array = mode=='rgb_array'))
-
+            results.append(self.viewers[i].render(return_rgb_array = mode =='rgb_array'))
         return results
 
     # create receptor field locations in local coordinate frame

@@ -1,4 +1,5 @@
 import numpy as np
+from numpy import linalg as LA
 
 # physical/external base state of all entites
 class EntityState(object):
@@ -29,7 +30,7 @@ class Entity(object):
         # name 
         self.name = ''
         # properties:
-        self.size = 0.050
+        self.size = 0.075
         # entity can move / be pushed
         self.movable = False
         # entity collides with others
@@ -39,8 +40,8 @@ class Entity(object):
         # color
         self.color = None
         # max speed and accel
-        self.max_speed = None
-        self.accel = None
+        self.max_speed = 2.0
+        self.accel = 10
         # state
         self.state = EntityState()
         # mass
@@ -50,12 +51,7 @@ class Entity(object):
     def mass(self):
         return self.initial_mass
 
-# properties of landmark entities
-class Landmark(Entity):
-     def __init__(self):
-        super(Landmark, self).__init__()
-
-# properties of agent entities
+# properties of agent entities, リーダーを表している
 class Agent(Entity):
     def __init__(self):
         super(Agent, self).__init__()
@@ -77,22 +73,151 @@ class Agent(Entity):
         self.action = Action()
         # script behavior to execute
         self.action_callback = None
+        # define front or not
+        self.front = False
 
+# Entityクラスを継承したFollwerクラスを作成
+class Follower(Entity):
+    def __init__(self):
+        super(Follower, self).__init__()
+        # フォロワの基準距離
+        self.r_F = {"r1": 0.2, "r2": 0.3, "r3": 0.45, "r4": 0.6, "r5": 0.8}
+        # リーダーの基準距離
+        self.r_L = {"r1d": 0.2, "r2d":  0.5, "r5d": 1.0}
+        # 微小な値
+        self.delta = 10e-2
+        # フォロワ間作用の係数
+        self.k_FF_coh = 2.5; self.k_FF_col = 3; self.k_FF_bar = 100;
+        # リーダーフォロワ間の係数
+        self.k_FL_col = 2; self.k_FL_bar = 100;   
+        # フォロワ-障害物間作用の係数
+        self.k_Fland_coh = 0; self.k_Fland_col = 3; self.k_Fland_bar = 100;
+        
+    def __calc_vec_FF(self, followers):
+        # フォロワiに対するフォロワjと障害物の相対ベクトルの取得
+        vec_FFs = []
+        for follower in followers:
+            if follower == self: continue
+            vec_FF = follower.state.p_pos - self.state.p_pos
+            vec_FFs.append(vec_FF)
+        
+        return vec_FFs
+    
+    def __calc_vec_Flands(self, obstacles):
+        # フォロワiに対する障害物の相対ベクトルの取得
+        vec_Flands = []
+        for land in obstacles:
+            vec_F_land = land.state.p_pos - self.state.p_pos
+            vec_Flands.append(vec_F_land)
+        
+        return vec_Flands
+    
+    def __calc_vec_FL(self, leaders):
+        # フォロワiに対するリーダーjの相対ベクトルの取得
+        vec_FLs = []
+        for leader in leaders:
+            vec_FL = leader.state.p_pos - self.state.p_pos
+            vec_FLs.append(vec_FL) 
+            
+        return vec_FLs
+    
+    def __calc_vel_FF(self, vec_FFs: list, vec_Flands: list):
+        final_vel_FF = np.array([0., 0.])
+        for vec_FF in vec_FFs:
+            dist = LA.norm(vec_FF)
+            if dist <= self.r_F["r1"]: vel_FF = np.array([0., 0.])
+            elif dist <= self.r_F["r2"]:
+                vel_FF = (- self.k_FF_col - np.log((self.r_F["r3"] - self.r_F["r1"]) / (dist - self.r_F["r1"])) + self.k_FF_bar * ((dist - self.r_F["r2"]) / (dist - self.r_F["r1"]))) * (vec_FF / dist)   
+            elif dist <= self.r_F["r3"]:
+                vel_FF = (- self.k_FF_col - np.log((self.r_F["r3"] - self.r_F["r1"]) / (dist - self.r_F["r1"]))) * (vec_FF / dist)
+            elif dist <= self.r_F["r4"] - self.delta:
+                vel_FF = - self.k_FF_col * (vec_FF / dist)
+            elif dist <= self.r_F["r4"]:
+                vel_FF = self.k_FF_col * (vec_FF / dist) * ((dist-self.r_F["r4"]) / self.delta)
+            elif dist <= self.r_F["r4"] + self.delta: 
+                vel_FF = self.k_FF_coh * (vec_FF / dist) * ((dist-self.r_F["r4"]) / self.delta)
+            elif dist <= self.r_F["r5"] - self.delta:
+                vel_FF = self.k_FF_coh * (vec_FF / dist)
+            elif dist <= self.r_F["r5"]: 
+                vel_FF = - self.k_FF_coh * (vec_FF / dist) * ((dist-self.r_F["r5"]) / self.delta)
+            else: vel_FF = np.array([0., 0.])
+            
+            final_vel_FF += vel_FF
+        
+        for vec_Fland in vec_Flands:
+            dist = LA.norm(vec_Fland)
+            if dist <= self.r_F["r1"]: vel_Fland = np.array([0., 0.])
+            elif dist <= self.r_F["r2"]:
+                vel_Fland = (- self.k_Fland_col - np.log((self.r_F["r3"] - self.r_F["r1"]) / (dist - self.r_F["r1"])) + self.k_Fland_bar * ((dist - self.r_F["r2"]) / (dist - self.r_F["r1"]))) * (vec_Fland / dist)   
+            elif dist <= self.r_F["r3"]:
+                vel_Fland = (- self.k_Fland_col - np.log((self.r_F["r3"] - self.r_F["r1"]) / (dist - self.r_F["r1"]))) * (vec_Fland / dist)
+            elif dist <= self.r_F["r4"] - self.delta:
+                vel_Fland = - self.k_Fland_col * (vec_Fland / dist)
+            elif dist <= self.r_F["r4"]:
+                vel_Fland = self.k_Fland_col * (vec_Fland / dist) * ((dist-self.r_F["r4"]) / self.delta)
+            elif dist <= self.r_F["r4"] + self.delta: 
+                vel_Fland = self.k_Fland_coh * (vec_Fland / dist) * ((dist-self.r_F["r4"]) / self.delta)
+            elif dist <= self.r_F["r5"] - self.delta:
+                vel_Fland = self.k_Fland_coh * (vec_Fland / dist)
+            elif dist <= self.r_F["r5"]: 
+                vel_Fland = - self.k_Fland_coh * (vec_Fland / dist) * ((dist-self.r_F["r5"]) / self.delta)
+            else: vel_Fland = np.array([0., 0.])
+            
+            final_vel_FF += vel_Fland 
+        
+        return final_vel_FF
+    
+    def __calc_vel_FL(self, vec_FLs: list):
+        final_vel_FL = np.array([0., 0.])
+        for vec_FL in vec_FLs:
+            dist = LA.norm(vec_FL)
+            if dist <= self.r_L["r1d"]: vel_FL = np.array([0, 0])
+            elif dist <= self.r_L["r2d"]: 
+                vel_FL = self.k_FL_bar * (vec_FL / dist) * (dist - self.r_L["r2d"]) / (dist - self.r_L["r1d"])\
+                        - self.k_FL_col * (vec_FL / dist)
+            elif dist <= self.r_L["r5d"] - self.delta:
+                vel_FL = - self.k_FL_col * (vec_FL / dist)
+            elif dist <= self.r_L["r5d"]: 
+                vel_FL = self.k_FL_col * (vec_FL / dist) * ((dist-self.r_L["r5d"]) / self.delta)
+            else: vel_FL = np.array([0., 0.])
+            
+            final_vel_FL += vel_FL 
+        
+        return final_vel_FL   
+    
+    def calc_follower_input(self, agents, followers, obstacles):
+        vec_FFs = self.__calc_vec_FF(followers)
+        vec_Flands = self.__calc_vec_Flands(obstacles)
+        vec_FLs = self.__calc_vec_FL(agents)
+        final_vel_FF = self.__calc_vel_FF(vec_FFs, vec_Flands)
+        final_vel_FL = self.__calc_vel_FL(vec_FLs)
+        # followerの入力
+        self.state.p_vel =  final_vel_FF + final_vel_FL
+        
+# properties of obstacles entities
+class Obstacle(Entity):
+     def __init__(self):
+        super(Obstacle, self).__init__()
+        
 # multi-agent world
 class World(object):
     def __init__(self):
         # list of agents and entities (can change at execution-time!)
+        # leader
         self.agents = []
-        self.landmarks = []
+        # follower
+        self.followers = []
+        # obstacles
+        self.obstacles = []
         # communication channel dimensionality
         self.dim_c = 0
         # position dimensionality
         self.dim_p = 2
         # color dimensionality
         self.dim_color = 3
-        # simulation timestep
-        self.dt = 0.1
-        # physical damping
+        # simulation timestep -> 25FPS
+        self.dt = 0.035
+        # physical damping -> バネ、ダンパーのダンパー,速度の減衰具合を表す
         self.damping = 0.25
         # contact response parameters
         self.contact_force = 1e+2
@@ -101,7 +226,7 @@ class World(object):
     # return all entities in the world
     @property
     def entities(self):
-        return self.agents + self.landmarks
+        return self.agents + self.followers + self.obstacles
 
     # return all agents controllable by external policies
     @property
@@ -113,25 +238,8 @@ class World(object):
     def scripted_agents(self):
         return [agent for agent in self.agents if agent.action_callback is not None]
 
-    # update state of the world
-    def step(self):
-        # set actions for scripted agents 
-        for agent in self.scripted_agents:
-            agent.action = agent.action_callback(agent, self)
-        # gather forces applied to entities
-        p_force = [None] * len(self.entities)
-        # apply agent physical controls
-        p_force = self.apply_action_force(p_force)
-        # apply environment forces
-        p_force = self.apply_environment_force(p_force)
-        # integrate physical state
-        self.integrate_state(p_force)
-        # update agent state
-        for agent in self.agents:
-            self.update_agent_state(agent)
-
     # gather agent action forces
-    def apply_action_force(self, p_force):
+    def __apply_action_force(self, p_force):
         # set applied forces
         for i,agent in enumerate(self.agents):
             if agent.movable:
@@ -139,45 +247,8 @@ class World(object):
                 p_force[i] = agent.action.u + noise                
         return p_force
 
-    # gather physical forces acting on entities
-    def apply_environment_force(self, p_force):
-        # simple (but inefficient) collision response
-        for a,entity_a in enumerate(self.entities):
-            for b,entity_b in enumerate(self.entities):
-                if(b <= a): continue
-                [f_a, f_b] = self.get_collision_force(entity_a, entity_b)
-                if(f_a is not None):
-                    if(p_force[a] is None): p_force[a] = 0.0
-                    p_force[a] = f_a + p_force[a] 
-                if(f_b is not None):
-                    if(p_force[b] is None): p_force[b] = 0.0
-                    p_force[b] = f_b + p_force[b]        
-        return p_force
-
-    # integrate physical state
-    def integrate_state(self, p_force):
-        for i,entity in enumerate(self.entities):
-            if not entity.movable: continue
-            entity.state.p_vel = entity.state.p_vel * (1 - self.damping)
-            if (p_force[i] is not None):
-                entity.state.p_vel += (p_force[i] / entity.mass) * self.dt
-            if entity.max_speed is not None:
-                speed = np.sqrt(np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1]))
-                if speed > entity.max_speed:
-                    entity.state.p_vel = entity.state.p_vel / np.sqrt(np.square(entity.state.p_vel[0]) +
-                                                                  np.square(entity.state.p_vel[1])) * entity.max_speed
-            entity.state.p_pos += entity.state.p_vel * self.dt
-
-    def update_agent_state(self, agent):
-        # set communication state (directly for now)
-        if agent.silent:
-            agent.state.c = np.zeros(self.dim_c)
-        else:
-            noise = np.random.randn(*agent.action.c.shape) * agent.c_noise if agent.c_noise else 0.0
-            agent.state.c = agent.action.c + noise      
-
-    # get collision forces for any contact between two entities
-    def get_collision_force(self, entity_a, entity_b):
+     # get collision forces for any contact between two entities
+    def __get_collision_force(self, entity_a, entity_b):
         if (not entity_a.collide) or (not entity_b.collide):
             return [None, None] # not a collider
         if (entity_a is entity_b):
@@ -194,3 +265,63 @@ class World(object):
         force_a = +force if entity_a.movable else None
         force_b = -force if entity_b.movable else None
         return [force_a, force_b]
+    
+    # gather physical forces acting on entities
+    def __apply_environment_force(self, p_force):
+        # simple (but inefficient) collision response
+        for a,entity_a in enumerate(self.entities):
+            for b,entity_b in enumerate(self.entities):
+                if(b <= a): continue
+                [f_a, f_b] = self.__get_collision_force(entity_a, entity_b)
+                if(f_a is not None):
+                    if(p_force[a] is None): p_force[a] = 0.0
+                    p_force[a] = f_a + p_force[a] 
+                if(f_b is not None):
+                    if(p_force[b] is None): p_force[b] = 0.0
+                    p_force[b] = f_b + p_force[b]        
+        return p_force
+
+    # integrate physical state
+    def __integrate_state(self, p_force):
+        # leaderの位置を更新
+        for i, leader in enumerate(self.agents):
+            if not leader.movable: continue
+            leader.state.p_vel = leader.state.p_vel * (1 - self.damping)
+            if (p_force[i] is not None):
+                leader.state.p_vel += (p_force[i] / leader.mass) * self.dt
+            if leader.max_speed is not None:
+                speed = np.sqrt(np.square(leader.state.p_vel[0]) + np.square(leader.state.p_vel[1]))
+                if speed > leader.max_speed:
+                    leader.state.p_vel = leader.state.p_vel / np.sqrt(np.square(leader.state.p_vel[0]) +
+                                                                    np.square(leader.state.p_vel[1])) * leader.max_speed
+            leader.state.p_pos += leader.state.p_vel * self.dt
+        # followerの位置を更新
+        for i, follower in enumerate(self.followers):
+            follower.calc_follower_input(self.agents, self.followers, self.obstacles)
+            follower.state.p_pos += follower.state.p_vel * self.dt
+            
+            
+    def __update_agent_state(self, agent):
+        # set communication state (directly for now)
+        if agent.silent:
+            agent.state.c = np.zeros(self.dim_c)
+        else:
+            noise = np.random.randn(*agent.action.c.shape) * agent.c_noise if agent.c_noise else 0.0
+            agent.state.c = agent.action.c + noise      
+    
+    # update state of the world
+    def step(self):
+        # set actions for scripted agents 
+        for agent in self.scripted_agents:
+            agent.action = agent.action_callback(agent, self)
+        # gather forces applied to entities
+        p_force = [None] * len(self.entities)
+        # apply agent physical controls
+        p_force = self.__apply_action_force(p_force)
+        # apply environment forces
+        p_force = self.__apply_environment_force(p_force)
+        # integrate physical state -> ここでポジション更新
+        self.__integrate_state(p_force)
+        # update agent state
+        for agent in self.agents:
+            self.__update_agent_state(agent)
