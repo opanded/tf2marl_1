@@ -21,6 +21,8 @@ class Scenario(BaseScenario):
         self.num_Fs = 6
         self.num_Os = 1
         self.funcs = Basefuncs()
+        self.viewer = None
+        self.render_geoms = None
     
     def make_world(self):
         world = World()
@@ -49,7 +51,8 @@ class Scenario(BaseScenario):
             O.movable = True
             O.color = np.array([0, 0.5, 0])
         self.max_dis_to_des = 15.
-        self.max_dis_to_F = 5.
+        self.max_dis_to_L = 7.5
+        self.max_dis_to_F = 7.5
         self.max_dis_to_O = 5. 
         # make initial conditions
         self.reset_world(world)
@@ -296,57 +299,113 @@ class Scenario(BaseScenario):
     def observation(self, L, world):
         i = int(L.name.replace('leader_', ''))
         
-        F_COM = self.funcs._calc_F_COM(world)
-        COM_to_des = self.des - F_COM
-        COM_to_des = self.funcs._coordinate_trans(COM_to_des)
-        COM_to_des[0] /= self.max_dis_to_des  # 距離の正規化
+        # F_COM = self.funcs._calc_F_COM(world)
+        # COM_to_des = self.des - F_COM
+        # COM_to_des = self.funcs._coordinate_trans(COM_to_des)
+        # COM_to_des[0] /= self.max_dis_to_des  # 距離の正規化
 
-        COM_to_O = world.obstacles[0].state.p_pos - F_COM
-        COM_to_O = self.funcs._coordinate_trans(COM_to_O)
-        COM_to_O[0] /= self.max_dis_to_O  # 距離の正規化
-        if COM_to_O[0] >= 1.0: COM_to_O[0] = 1.0
+        # COM_to_O = world.obstacles[0].state.p_pos - F_COM
+        # COM_to_O = self.funcs._coordinate_trans(COM_to_O)
+        # COM_to_O[0] /= self.max_dis_to_O  # 距離の正規化
+        # if COM_to_O[0] >= 1.0: COM_to_O[0] = 1.0
         
-        # L_to_COM = F_COM - L.state.p_pos
-        # L_to_COM = self.funcs._coordinate_trans(L_to_COM)
-        # self.L_to_COM_deques[i].append([L_to_COM])
+        # # L_to_COM = F_COM - L.state.p_pos
+        # # L_to_COM = self.funcs._coordinate_trans(L_to_COM)
+        # # self.L_to_COM_deques[i].append([L_to_COM])
         
-        L_to_Ls = []
-        for other in world.agents:
-            if L is other: continue 
-            L_to_L = other.state.p_pos - L.state.p_pos
-            L_to_L = self.funcs._coordinate_trans(L_to_L)
-            L_to_Ls.append(L_to_L)
-        self.L_to_Ls_deques[i].append(L_to_Ls)
+        # L_to_Ls = []
+        # for other in world.agents:
+        #     if L is other: continue 
+        #     L_to_L = other.state.p_pos - L.state.p_pos
+        #     L_to_L = self.funcs._coordinate_trans(L_to_L)
+        #     L_to_Ls.append(L_to_L)
+        # self.L_to_Ls_deques[i].append(L_to_Ls)
         
-        L_to_Fs = []
-        for F in world.followers:
-            L_to_F = F.state.p_pos - L.state.p_pos
-            L_to_F = self.funcs._coordinate_trans(L_to_F)
-            L_to_F[0] /= self.max_dis_to_F  # 距離の正規化, フォロワの距離の正規化はもしかするといらないかも
-            if L_to_F[0] >= 1.0: L_to_F[0] = 1.0
-            L_to_Fs.append(L_to_F)
-        # to do: フォロワの並び替えの方法もう少し考える．    
-        # self.L_to_Fs_deques[i].append(np.sort(L_to_Fs, axis=0).tolist())
-        self.L_to_Fs_deques[i].append(L_to_Fs)
+        # L_to_Fs = []
+        # for F in world.followers:
+        #     L_to_F = F.state.p_pos - L.state.p_pos
+        #     L_to_F = self.funcs._coordinate_trans(L_to_F)
+        #     L_to_F[0] /= self.max_dis_to_F  # 距離の正規化, フォロワの距離の正規化はもしかするといらないかも
+        #     if L_to_F[0] >= 1.0: L_to_F[0] = 1.0
+        #     L_to_Fs.append(L_to_F)
+        # # to do: フォロワの並び替えの方法もう少し考える．    
+        # # self.L_to_Fs_deques[i].append(np.sort(L_to_Fs, axis=0).tolist())
+        # self.L_to_Fs_deques[i].append(L_to_Fs)
         
-        L_to_Os = []
-        for O in world.obstacles: 
-            L_to_O = O.state.p_pos - L.state.p_pos
-            L_to_O = self.funcs._coordinate_trans(L_to_O)
-            L_to_Os.append(L_to_O)
-        self.L_to_Os_deques[i].append(L_to_Os)
+        # L_to_Os = []
+        # for O in world.obstacles: 
+        #     L_to_O = O.state.p_pos - L.state.p_pos
+        #     L_to_O = self.funcs._coordinate_trans(L_to_O)
+        #     L_to_Os.append(L_to_O)
+        # self.L_to_Os_deques[i].append(L_to_Os)
         
+        # obs = np.concatenate([COM_to_des] + [COM_to_O] + [L.state.p_vel] \
+        #     + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1]\
+        #     + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1])
         
-        # obs = np.concatenate([COM_to_des] + [agent.state.p_vel] \
-        #     + self.L_to_COM_deques[i][0] + self.L_to_COM_deques[i][1] + self.L_to_COM_deques[i][2]\
-        #     + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1] + self.L_to_Fs_deques[i][2]\
-        #     + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1] + self.L_to_Ls_deques[i][2]\
-        #     + self.L_to_Os_deques[i][0] + self.L_to_Os_deques[i][1] + self.L_to_Os_deques[i][2])
+
+        if self.viewer is None:
+            from tf2marl.multiagent import rendering
+            self.viewer = rendering.Viewer(200, 200)
+
+        # create rendering geometry
+        if self.render_geoms is None:
+            from tf2marl.multiagent import rendering
+            self.render_geoms = []
+            self.render_geoms_xform = []
+            for entity in world.entities:
+                geom = rendering.make_circle(entity.size)
+                xform = rendering.Transform()
+                if 'leader' in entity.name:
+                    print(int(entity.name.replace('leader_', '')))
+                    if i == int(entity.name.replace('leader_', '')):
+                        geom.set_color(*entity.color, alpha=0.5)
+                    else: geom.set_color(*np.array([1, 0.5, 0]), alpha=0.5)
+                else:
+                    geom.set_color(*entity.color)
+                geom.add_attr(xform)
+                self.render_geoms.append(geom)
+                self.render_geoms_xform.append(xform)
+            
+            # 目的地を追加
+            geom_des = rendering.make_circle(self.rho_g)
+            geom_des.set_color(*np.array([0.5, 0.5, 0.5]), alpha=0.5) # alphaは透明度を表す
+            xform_des = rendering.Transform()
+            geom_des.add_attr(xform_des)
+            self.render_geoms.append(geom_des)
+            self.render_geoms_xform.append(xform_des)
+            # 重心を追加
+            size = 0.04
+            points = [(size, 0), (0, 1.5 * size), (-size, 0), (0, -1.5 * size)]
+            geom_COM = rendering.make_polygon(points)
+            geom_COM.set_color(*np.array([0, 0.5, 0]), alpha=1) # alphaは透明度を表す
+            xform_COM = rendering.Transform()
+            geom_COM.add_attr(xform_COM)
+            self.render_geoms.append(geom_COM)
+            self.render_geoms_xform.append(xform_COM)
+            
+            # add geoms to viewer
+            self.viewer.geoms = []
+            for geom in self.render_geoms:
+                self.viewer.add_geom(geom)
+
+        # update bounds to center around agent
+        # 原点を表す．agentを原点に固定して周りを相対的に動かすとかでも良さそう．
+        pos = np.zeros(world.dim_p)
+        # pos = self.agents[i].state.p_pos
+        cam_range = 12.5 # 拡大、縮小を決める変数
+        self.viewer.set_bounds(pos[0] - cam_range,pos[0] + cam_range, pos[1]-cam_range, pos[1]+ cam_range)
+        # update geometry positions
+        for e, entity in enumerate(world.entities):
+            self.render_geoms_xform[e].set_translation(*entity.state.p_pos)
+        # 目標値の更新
+        self.render_geoms_xform[len(world.entities)].set_translation(*self.des)
+        # 重心の更新
+        follower_COM = self.funcs._calc_F_COM(world)
+        self.render_geoms_xform[len(world.entities) + 1].set_translation(*follower_COM)
+        obs = self.viewer.render(return_rgb_array = True)
         
-        obs = np.concatenate([COM_to_des] + [COM_to_O] + [L.state.p_vel] \
-            + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1]\
-            + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1])
-        
+        # print(obs.shape)
         return obs
     
     def check_done(self, L, world):
@@ -357,11 +416,14 @@ class Scenario(BaseScenario):
         # is_col = self.funcs._check_col(world)
         # 分裂したか否か
         is_div = self.funcs._chech_div(world)
-        
         # desまでの距離がmaxを超えていないか
         dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
         if dis_to_des > self.max_dis_to_des: is_exceed = True
         else: is_exceed = False
+        # Fまでのmin距離がmaxを超えていないか
+        dis_to_min_F = self.funcs._calc_min_dis_to_F(L, world)
+        if dis_to_min_F > self.max_dis_to_F: is_exceed_F = True
+        else: is_exceed_F = False
         
-        if is_goal or is_div or is_exceed: return True
+        if is_goal or is_div or is_exceed or is_exceed_F: return True
         else: return False
