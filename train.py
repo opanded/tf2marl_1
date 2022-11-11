@@ -5,6 +5,8 @@ results from the papers.
 
 import time
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from typing import List
 
 import numpy as np
@@ -19,10 +21,11 @@ from tf2marl.multiagent.environment import MultiAgentEnv
 from tf2marl.common.util import softmax_to_argmax
 
 if tf.config.experimental.list_physical_devices('GPU'):
-    tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[0],
-                                             True)
-
-train_ex = Experiment('train')
+    for i in range(len(tf.config.list_physical_devices('GPU'))):
+        tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[i],
+                                                True)
+print(len(tf.config.experimental.list_physical_devices('GPU')))
+train_ex = Experiment('sheperding_st1')
 
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -33,36 +36,38 @@ def train_config():
     # Logging
     exp_name = 'default'            # name for logging
 
-    display = False                 # render environment
+    display = False
     restore_fp = None               # path to restore models from, e.g.
+    # display = True                 # render environment
+    # restore_fp = "results/sacred/7/models"
                                     # 'results/sacred/182/models', or None to train a new model
-    save_rate = 10                  # frequency to save policy as number of episodes
-
+    save_rate = 1000                # frequency to save policy as number of episodes
+    is_replay_epi = False
     # Environment
-    scenario_name = 'simple_spread' # environment name
-    num_episodes = 60000            # total episodes
-    max_episode_len = 25            # timesteps per episodes
+    scenario_name = 'sheperding_st1' # environment name
+    num_episodes = 10000            # total episodes
+    max_episode_len = 500           # timesteps per episodes
 
     # Agent Parameters
-    good_policy = 'matd3'          # policy of "good" agents in env
-    adv_policy = 'matd3'           # policy of adversary agents in env
+    good_policy = 'maddpg'          # policy of "good" agents in env
+    adv_policy = 'masac'           # policy of adversary agents in env
     # available agent: maddpg, matd3, mad3pg, masac
 
     # General Training Hyperparameters
-    lr = 1e-2                       # learning rate for critics and policies
-    gamma = 0.95                    # decay used in environments
+    lr = 1e-3                       # learning rate for critics and policies
+    gamma = 0.975                   # decay used in environments
     batch_size = 1024               # batch size for training
     num_layers = 2                  # hidden layers per network
     num_units = 64                  # units per hidden layer
 
     update_rate = 100               # update policy after each x steps
     critic_zero_if_done = False     # set the value to zero in terminal steps
-    buff_size = 1e6                 # size of the replay buffer
+    buff_size = 1e5                # size of the replay buffer
     tau = 0.01                      # Update for target networks
     hard_max = False                # use Straight-Through (ST) Gumbel
 
     priori_replay = False           # enable prioritized replay
-    alpha = 0.6                     # alpha value (weights prioritization vs random)
+    alpha = 0.6                  # alpha value (weights prioritization vs random)
     beta = 0.5                      # beta value  (controls importance sampling)
 
     use_target_action = True        # use target action in environment, instead of normal action
@@ -97,19 +102,19 @@ def make_env(scenario_name) -> MultiAgentEnv:
     scenario = scenarios.load(scenario_name + '.py').Scenario()
     # create world
     world = scenario.make_world()
-    env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation)
+    env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, done_callback = scenario.check_done)
     return env
 
 
 @train_ex.main
-def train(_run, exp_name, save_rate, display, restore_fp,
+def train(_run, exp_name, save_rate, is_replay_epi, display, restore_fp,
           hard_max, max_episode_len, num_episodes, batch_size, update_rate,
           use_target_action):
     """
     This is the main training function, which includes the setup and training loop.
     It is meant to be called automatically by sacred, but can be used without it as well.
 
-    :param _run:            Sacred _run object for legging
+    :param _run:            Sacred _run object for logging
     :param exp_name:        (str) Name of the experiment
     :param save_rate:       (int) Frequency to save networks at
     :param display:         (bool) Render the environment
@@ -138,7 +143,7 @@ def train(_run, exp_name, save_rate, display, restore_fp,
             fp = os.path.join(restore_fp, 'agent_{}'.format(ag_idx))
             agent.load(fp)
 
-    obs_n = env.reset()
+    obs_n, pos_dict = env.reset(is_replay_epi)
 
     print('Starting iterations...')
     while True:
@@ -172,7 +177,7 @@ def train(_run, exp_name, save_rate, display, restore_fp,
             logger.agent_rewards[ag_idx][-1] += rew
 
         if done:
-            obs_n = env.reset()
+            obs_n, pos_dict = env.reset(is_replay_epi)
             episode_step = 0
             logger.record_episode_end(agents)
 
@@ -188,7 +193,8 @@ def train(_run, exp_name, save_rate, display, restore_fp,
         # for displaying learned policies
         if display:
             time.sleep(0.1)
-            env.render()
+            print(env.render('rgb_array')[0].shape)
+        # env.render('rgb_array')[0]
 
         # saves logger outputs to a file similar to the way in the original MADDPG implementation
         if len(logger.episode_rewards) > num_episodes:
