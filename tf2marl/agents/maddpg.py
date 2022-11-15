@@ -346,6 +346,241 @@ class MADDPGPolicyConvNetwork(object):
         else:
             self.output_layer = tf.keras.layers.Dense(self.act_shape, activation='tanh',
                                                       name='ag{}_output'.format(agent_index))
+        # 複数gpu用の処理
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            # connect layers
+            x = self.obs_input
+            for idx in range(len(self.conv_layers)):
+                x = self.conv_layers[idx](x)
+            
+            x = tf.keras.layers.Flatten()(x)
+            for idx in range(len(self.hidden_layers)):
+                x = self.hidden_layers[idx](x)
+            
+            x = self.output_layer(x)
+            
+            self.model = tf.keras.Model(inputs=[self.obs_input], outputs=[x])
+
+    @classmethod
+    def gumbel_softmax_sample(cls, logits):
+        """
+        Produces Gumbel softmax samples from the input log-probabilities (logits).
+        These are used, because they are differentiable approximations of the distribution of an argmax.
+        """
+        uniform_noise = tf.random.uniform(tf.shape(logits))
+        gumbel = -tf.math.log(-tf.math.log(uniform_noise))
+        noisy_logits = gumbel + logits  # / temperature
+        return tf.math.softmax(noisy_logits)
+
+    def forward_pass(self, obs):
+        """
+        Performs a simple forward pass through the NN.
+        """
+        x = obs
+        for idx in range(len(self.conv_layers)):
+            x = self.conv_layers[idx](x)
+        
+        x = tf.keras.layers.Flatten()(x)
+        for idx in range(len(self.hidden_layers)):
+            x = self.hidden_layers[idx](x)
+        
+        outputs = self.output_layer(x)  # log probabilities of the gumbel softmax dist are the output of the network
+        return outputs
+
+    @tf.function
+    def get_action(self, obs):
+        outputs = self.forward_pass(obs)
+        if self.use_gumbel:
+            outputs = self.gumbel_softmax_sample(outputs)
+        return outputs
+
+    @tf.function
+    def train(self, obs_n, act_n):
+        with tf.GradientTape() as tape:
+            x = self.forward_pass(obs_n[self.agent_index])
+            act_n = tf.unstack(act_n)
+            if self.use_gumbel:
+                logits = x  # log probabilities of the gumbel softmax dist are the output of the network
+                act_n[self.agent_index] = self.gumbel_softmax_sample(logits)
+            else:
+                act_n[self.agent_index] = x
+            q_value = self.q_network._predict_internal(obs_n + act_n)
+            policy_regularization = tf.math.reduce_mean(tf.math.square(x))
+            loss = -tf.math.reduce_mean(q_value) + 1e-3 * policy_regularization  # gradient plus regularization
+
+        gradients = tape.gradient(loss, self.model.trainable_variables)  # todo not sure if this really works
+        # gradients = tf.clip_by_global_norm(gradients, self.clip_norm)[0]
+        local_clipped = clip_by_local_norm(gradients, self.clip_norm)
+        self.optimizer.apply_gradients(zip(local_clipped, self.model.trainable_variables))
+        return loss
+    
+
+class MADDPGCriticConvNetwork(object):
+    def __init__(self, num_hidden_layers, units_per_layer, lr, obs_n_shape, act_shape_n, act_type, agent_index):
+        """
+        Implementation of a critic to represent the Q-Values. Basically just a fully-connected
+        regression ANN.
+        """
+        self.num_layers = num_hidden_layers
+        self.lr = lr
+        self.obs_shape_n = obs_n_shape
+        self.act_shape_n = act_shape_n
+        self.act_type = act_type
+
+        self.clip_norm = 0.5
+        self.optimizer = tf.keras.optimizers.Adam(lr=self.lr)
+
+        # set up layers
+        # each agent's action and obs are treated as separate inputs
+        self.obs_input_n = []
+        for idx, shape in enumerate(self.obs_shape_n):
+            self.obs_input_n.append(tf.keras.layers.Input(shape=shape, name='obs_in' + str(idx)))
+
+        self.act_input_n = []
+        for idx, shape in enumerate(self.act_shape_n):
+            self.act_input_n.append(tf.keras.layers.Input(shape=shape, name='act_in' + str(idx)))
+
+        self.input_concat_layer = tf.keras.layers.Concatenate()
+
+        self.conv_layers = []
+        # layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu', input_shape=self.obs_n_shape[agent_index][1:])
+        layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu')
+        self.conv_layers.append(layer1)
+        layer2 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 3, activation='relu')
+        self.conv_layers.append(layer2)
+        
+        self.hidden_layers = []
+        for idx in range(self.num_layers):
+            layer = tf.keras.layers.Dense(units_per_layer, activation='relu',
+                                          name='ag{}crit_hid{}'.format(agent_index, idx))
+            self.hidden_layers.append(layer)
+        
+        self.output_layer = tf.keras.layers.Dense(1, activation='linear',
+                                                  name='ag{}crit_out'.format(agent_index))
+        
+        strategy = tf.distribute.MirroredStrategy()
+        with strategy.scope():
+            # connect layers
+            x = tf.keras.layers.Concatenate(axis=0)(self.obs_input_n)
+            for idx in range(len(self.conv_layers)):
+                x = self.conv_layers[idx](x)
+            
+            x = tf.keras.layers.Flatten()(x)
+            x = self.input_concat_layer([x] + [self.input_concat_layer(self.act_input_n)])  # ここでactionを結合する
+            
+            for idx in range(len(self.hidden_layers)):
+                x = self.hidden_layers[idx](x)
+            
+            x = self.output_layer(x)
+            
+            self.model = tf.keras.Model(inputs=self.obs_input_n + self.act_input_n,  # list concatenation
+                                        outputs=[x])
+            self.model.compile(self.optimizer, loss='mse')
+            # self.model.summary()
+
+    def predict(self, obs_n, act_n):
+        """
+        Predict the value of the input.
+        """
+        return self._predict_internal(obs_n, act_n)
+
+    @tf.function
+    def _predict_internal(self, obs_n, act_n):
+        """
+        Internal function, because concatenation can not be done in tf.function
+        """
+        x = tf.keras.layers.Concatenate(axis=0)(obs_n)
+        for idx in range(len(self.conv_layers)):
+            x = self.conv_layers[idx](x)
+        
+        x = tf.keras.layers.Flatten()(x)
+        x = self.input_concat_layer([x] + [self.input_concat_layer(act_n)])  # ここでactionを結合する
+        
+        for idx in range(len(self.hidden_layers)):
+            x = self.hidden_layers[idx](x)
+        
+        x = self.output_layer(x)
+        return x
+
+    def train_step(self, obs_n, act_n, target_q, weights):
+        """
+        Train the critic network with the observations, actions, rewards and next observations, and next actions.
+        """
+        return self._train_step_internal(obs_n, act_n, target_q, weights)
+
+    @tf.function
+    def _train_step_internal(self, obs_n, act_n, target_q, weights):
+        """
+        Internal function, because concatenation can not be done inside tf.function
+        """
+        with tf.GradientTape() as tape:
+            x = tf.keras.layers.Concatenate(axis=0)(obs_n)
+            for idx in range(len(self.conv_layers)):
+                x = self.conv_layers[idx](x)
+            
+            x = tf.keras.layers.Flatten()(x)
+            x = self.input_concat_layer([x] + [self.input_concat_layer(act_n)])  # ここでactionを結合する
+            
+            for idx in range(len(self.hidden_layers)):
+                x = self.hidden_layers[idx](x)
+            
+            q_pred = self.output_layer(x)
+            td_loss = tf.math.square(target_q - q_pred)
+            loss = tf.reduce_mean(td_loss * weights)
+
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+
+        local_clipped = clip_by_local_norm(gradients, self.clip_norm)
+        self.optimizer.apply_gradients(zip(local_clipped, self.model.trainable_variables))
+
+        return td_loss
+
+# LSTM層を追加したポリシー
+class MADDPGPolicyLstmNetwork(object):
+    def __init__(self, num_layers, units_per_layer, lr, obs_n_shape, act_shape, act_type,
+                 gumbel_temperature, q_network, agent_index, num_Os):
+        """
+        Implementation of the policy network, with optional gumbel softmax activation at the final layer.
+        """
+        self.num_layers = num_layers
+        self.lr = lr
+        self.obs_n_shape = obs_n_shape
+        self.act_shape = act_shape
+        self.act_type = act_type
+        if act_type is Discrete:
+            self.use_gumbel = True
+        else:
+            self.use_gumbel = False
+        self.gumbel_temperature = gumbel_temperature
+        self.q_network = q_network
+        self.agent_index = agent_index
+        self.clip_norm = 0.5
+
+        self.optimizer = tf.keras.optimizers.Adam(lr=self.lr)
+
+        ### set up network structure
+        self.obs_input = tf.keras.layers.Input(shape=self.obs_n_shape[agent_index])
+        
+        self.conv_layers = []
+        # layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu', input_shape=self.obs_n_shape[agent_index][1:])
+        layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu')
+        self.conv_layers.append(layer1)
+        layer2 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 3, activation='relu')
+        self.conv_layers.append(layer2)
+        
+        self.hidden_layers = []
+        for idx in range(self.num_layers):
+            layer = tf.keras.layers.Dense(units_per_layer, activation='relu',
+                                          name='ag{}pol_hid{}'.format(agent_index, idx))
+            self.hidden_layers.append(layer)
+
+        if self.use_gumbel:
+            self.output_layer = tf.keras.layers.Dense(self.act_shape, activation='linear',
+                                                      name='ag{}_output'.format(agent_index))
+        else:
+            self.output_layer = tf.keras.layers.Dense(self.act_shape, activation='tanh',
+                                                      name='ag{}_output'.format(agent_index))
 
         # connect layers
         x = self.obs_input
@@ -414,7 +649,7 @@ class MADDPGPolicyConvNetwork(object):
         return loss
     
 
-class MADDPGCriticConvNetwork(object):
+class MADDPGCriticLstmNetwork(object):
     def __init__(self, num_hidden_layers, units_per_layer, lr, obs_n_shape, act_shape_n, act_type, agent_index):
         """
         Implementation of a critic to represent the Q-Values. Basically just a fully-connected
