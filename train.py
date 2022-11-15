@@ -34,6 +34,7 @@ input = int(input("input val(0 -> train, 1 -> display):"))
 if input == 0: is_display = False
 else: is_display = True
 load_dir = "results/sacred/5/models"
+scenario = 'sheperding_st1'
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -51,7 +52,7 @@ def train_config():
     save_rate = 200                # frequency to save policy as number of episodes
     is_replay_epi = False
     # Environment
-    scenario_name = 'sheperding_st1' # environment name
+    scenario_name = scenario # environment name
     num_episodes = 10000            # total episodes
     max_episode_len = 500           # timesteps per episodes
 
@@ -303,9 +304,9 @@ def main():
     # mongo_observer = MongoObserver(url='localhost:27017', db_name='sacred')
     # train_ex.observers.append(mongo_observer)
     if not is_display: 
-        file_observer = FileStorageObserver(os.path.join('results', 'sacred'))
+        file_observer = FileStorageObserver(os.path.join('learned_results', scenario))
     else: 
-        ex_path = os.path.join(load_dir.replace('/models', ''), "result")
+        ex_path = os.path.join(load_dir.replace('/models', ''), "demo")
         file_observer = FileStorageObserver(ex_path)
     train_ex.observers.append(file_observer)
     train_ex.run_commandline()
