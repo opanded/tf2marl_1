@@ -108,6 +108,6 @@ venv.bak/
 .mypy_cache/
 
 data/*
-results/
+learned_results/
 
 tf2marl/multiagent/gpu_test.py
