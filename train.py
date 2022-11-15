@@ -5,8 +5,8 @@ results from the papers.
 
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # ここを指定すると一つだけのgpuで計算を行うことができる．
+# os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from typing import List
 
 import numpy as np
@@ -20,13 +20,21 @@ from tf2marl.agents.AbstractAgent import AbstractAgent
 from tf2marl.multiagent.environment import MultiAgentEnv
 from tf2marl.common.util import softmax_to_argmax
 
-if tf.config.experimental.list_physical_devices('GPU'):
-    for i in range(len(tf.config.list_physical_devices('GPU'))):
-        tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[i],
-                                                True)
-print(len(tf.config.experimental.list_physical_devices('GPU')))
+# setup gpu
+list_gpu = tf.config.experimental.list_physical_devices('GPU')
+print("length of GPU: ", len(list_gpu))
+if list_gpu:
+    for i in range(len(list_gpu)):
+        tf.config.experimental.set_memory_growth(list_gpu[i], True)
+
 train_ex = Experiment('sheperding_st1')
 
+### set global variable ###
+input = int(input("input val(0 -> train, 1 -> display):"))
+if input == 0: is_display = False
+else: is_display = True
+load_dir = "results/sacred/5/models"
+### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
 # I recommend logging to a Mongo Database which can nicely be visualized with
@@ -36,12 +44,11 @@ def train_config():
     # Logging
     exp_name = 'default'            # name for logging
 
-    display = False
-    restore_fp = None               # path to restore models from, e.g.
-    # display = True                 # render environment
-    # restore_fp = "results/sacred/7/models"
-                                    # 'results/sacred/182/models', or None to train a new model
-    save_rate = 1000                # frequency to save policy as number of episodes
+    display = is_display
+    if is_display: restore_fp = load_dir
+    else: restore_fp = None
+                                
+    save_rate = 200                # frequency to save policy as number of episodes
     is_replay_epi = False
     # Environment
     scenario_name = 'sheperding_st1' # environment name
@@ -56,13 +63,13 @@ def train_config():
     # General Training Hyperparameters
     lr = 1e-3                       # learning rate for critics and policies
     gamma = 0.975                   # decay used in environments
-    batch_size = 1024               # batch size for training
+    batch_size = 256               # batch size for training
     num_layers = 2                  # hidden layers per network
-    num_units = 64                  # units per hidden layer
+    num_units = 32                  # units per hidden layer
 
     update_rate = 100               # update policy after each x steps
     critic_zero_if_done = False     # set the value to zero in terminal steps
-    buff_size = 1e5                # size of the replay buffer
+    buff_size = 1e3                # size of the replay buffer
     tau = 0.01                      # Update for target networks
     hard_max = False                # use Straight-Through (ST) Gumbel
 
@@ -192,8 +199,8 @@ def train(_run, exp_name, save_rate, is_replay_epi, display, restore_fp,
 
         # for displaying learned policies
         if display:
-            time.sleep(0.1)
-            print(env.render('rgb_array')[0].shape)
+            # time.sleep(0.025)
+            env.render('rgb_array')[0]
         # env.render('rgb_array')[0]
 
         # saves logger outputs to a file similar to the way in the original MADDPG implementation
@@ -292,10 +299,14 @@ def get_agents(_run, env, num_adversaries, good_policy, adv_policy, lr, batch_si
 
 
 def main():
-    file_observer = FileStorageObserver.create(os.path.join('results', 'sacred'))
     # use this code to attach a mongo database for logging
     # mongo_observer = MongoObserver(url='localhost:27017', db_name='sacred')
     # train_ex.observers.append(mongo_observer)
+    if not is_display: 
+        file_observer = FileStorageObserver(os.path.join('results', 'sacred'))
+    else: 
+        ex_path = os.path.join(load_dir.replace('/models', ''), "result")
+        file_observer = FileStorageObserver(ex_path)
     train_ex.observers.append(file_observer)
     train_ex.run_commandline()
 

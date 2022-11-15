@@ -15,21 +15,29 @@ class RLLogger(object):
         args = _run.config
         self.n_agents = n_agents
         self.n_adversaries = n_adversaries
-
         # if not os.path.exists(os.path.join(save_dir)):
         #     os.makedirs(save_dir)
         # while os.path.exists(os.path.join(save_dir, exp_name)):
         #     print('WARNING: EXPERIMENT ALREADY EXISTS. APPENDING TO  TRIAL_NAME.')
         #     exp_name = exp_name + '_i'
-        print(_run._id)
-        self.ex_path = os.path.join('results', 'sacred', str(_run._id))
-        os.makedirs(self.ex_path, exist_ok=True)
-        self.model_path = os.path.join(self.ex_path, 'models')
-        os.makedirs(self.model_path, exist_ok=True)
-        self.tb_path = os.path.join(self.ex_path, 'tb_logs')
-        os.makedirs(self.tb_path, exist_ok=True)
-        self.tb_writer = tf.summary.create_file_writer(self.tb_path)
-        self.tb_writer.set_as_default()
+        
+        # 学習時と実行時でフォルダを分ける
+        if not args["display"]:
+            self.ex_path = os.path.join('results', 'sacred', str(_run._id))
+            os.makedirs(self.ex_path, exist_ok=True)
+            self.model_path = os.path.join(self.ex_path, 'models')
+            os.makedirs(self.model_path, exist_ok=True)
+            self.tb_path = os.path.join(self.ex_path, 'tb_logs')
+            os.makedirs(self.tb_path, exist_ok=True)
+            self.tb_writer = tf.summary.create_file_writer(self.tb_path)
+            self.tb_writer.set_as_default()
+        else:
+            self.ex_path = os.path.join(args["restore_fp"].replace('/models', ''), "result",str(_run._id))
+            os.makedirs(self.ex_path, exist_ok=True)
+            self.tb_path = os.path.join(self.ex_path, 'tb_logs')
+            os.makedirs(self.tb_path, exist_ok=True)
+            self.tb_writer = tf.summary.create_file_writer(self.tb_path)
+            self.tb_writer.set_as_default()
 
         # save arguments
         args_file_name = os.path.join(self.ex_path, 'args.pkl')
