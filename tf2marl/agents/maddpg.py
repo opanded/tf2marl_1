@@ -24,13 +24,13 @@ class MADDPGAgent(AbstractAgent):
                          prioritized_replay_eps=prioritized_replay_eps)
 
         act_type = type(act_space_n[0])
-        self.critic = MADDPGCriticConvNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
-        self.critic_target = MADDPGCriticConvNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic = MADDPGCriticLstmNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_target = MADDPGCriticLstmNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
         self.critic_target.model.set_weights(self.critic.model.get_weights())
 
-        self.policy = MADDPGPolicyConvNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        self.policy = MADDPGPolicyLstmNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
                                           self.critic, agent_index)
-        self.policy_target = MADDPGPolicyConvNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        self.policy_target = MADDPGPolicyLstmNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
                                                  self.critic, agent_index)
         self.policy_target.model.set_weights(self.policy.model.get_weights())
 
@@ -59,9 +59,17 @@ class MADDPGAgent(AbstractAgent):
         Implements the updates of the target networks, which slowly follow the real network.
         """
         def update_target_network(net: tf.keras.Model, target_net: tf.keras.Model):
-            net_weights = np.array(net.get_weights())
-            target_net_weights = np.array(target_net.get_weights())
-            new_weights = tau * net_weights + (1.0 - tau) * target_net_weights
+            # net_weights = np.array(net.get_weights())
+            # target_net_weights = np.array(target_net.get_weights())
+            # new_weights = tau * net_weights + (1.0 - tau) * target_net_weights
+            # numpyのwarningが出るので以下に書き換え
+            net_weights = net.get_weights()
+            target_net_weights = target_net.get_weights()
+            new_weights = []
+            for net_weight, target_net_weight in zip(net_weights, target_net_weights):
+                new_weight = tau * net_weight + (1.0 - tau) * target_net_weight    
+                new_weights.append(new_weight)
+            
             target_net.set_weights(new_weights)
 
         update_target_network(self.critic.model, self.critic_target.model)
@@ -328,11 +336,14 @@ class MADDPGPolicyConvNetwork(object):
         self.obs_input = tf.keras.layers.Input(shape=self.obs_n_shape[agent_index])
         
         self.conv_layers = []
-        # layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu', input_shape=self.obs_n_shape[agent_index][1:])
-        layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu')
-        self.conv_layers.append(layer1)
-        layer2 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 3, activation='relu')
-        self.conv_layers.append(layer2)
+        conv1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu')
+        self.conv_layers.append(conv1)
+        pool1 = tf.keras.layers.MaxPooling2D(pool_size=(4, 4))
+        self.conv_layers.append(pool1)
+        conv2 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 3, activation='relu')
+        self.conv_layers.append(conv2)
+        pool2 = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))
+        self.conv_layers.append(pool2)
         
         self.hidden_layers = []
         for idx in range(self.num_layers):
@@ -346,21 +357,21 @@ class MADDPGPolicyConvNetwork(object):
         else:
             self.output_layer = tf.keras.layers.Dense(self.act_shape, activation='tanh',
                                                       name='ag{}_output'.format(agent_index))
-        # 複数gpu用の処理
-        strategy = tf.distribute.MirroredStrategy()
-        with strategy.scope():
-            # connect layers
-            x = self.obs_input
-            for idx in range(len(self.conv_layers)):
-                x = self.conv_layers[idx](x)
-            
-            x = tf.keras.layers.Flatten()(x)
-            for idx in range(len(self.hidden_layers)):
-                x = self.hidden_layers[idx](x)
-            
-            x = self.output_layer(x)
-            
-            self.model = tf.keras.Model(inputs=[self.obs_input], outputs=[x])
+        # # 複数gpu用の処理
+        # strategy = tf.distribute.MirroredStrategy()
+        # with strategy.scope():
+        # connect layers
+        x = self.obs_input
+        for idx in range(len(self.conv_layers)):
+            x = self.conv_layers[idx](x)
+        
+        x = tf.keras.layers.Flatten()(x)
+        for idx in range(len(self.hidden_layers)):
+            x = self.hidden_layers[idx](x)
+        
+        x = self.output_layer(x)
+        
+        self.model = tf.keras.Model(inputs=[self.obs_input], outputs=[x])
 
     @classmethod
     def gumbel_softmax_sample(cls, logits):
@@ -405,7 +416,7 @@ class MADDPGPolicyConvNetwork(object):
                 act_n[self.agent_index] = self.gumbel_softmax_sample(logits)
             else:
                 act_n[self.agent_index] = x
-            q_value = self.q_network._predict_internal(obs_n + act_n)
+            q_value = self.q_network._predict_internal(obs_n, act_n)
             policy_regularization = tf.math.reduce_mean(tf.math.square(x))
             loss = -tf.math.reduce_mean(q_value) + 1e-3 * policy_regularization  # gradient plus regularization
 
@@ -444,11 +455,14 @@ class MADDPGCriticConvNetwork(object):
         self.input_concat_layer = tf.keras.layers.Concatenate()
 
         self.conv_layers = []
-        # layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu', input_shape=self.obs_n_shape[agent_index][1:])
-        layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu')
-        self.conv_layers.append(layer1)
-        layer2 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 3, activation='relu')
-        self.conv_layers.append(layer2)
+        conv1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu')
+        self.conv_layers.append(conv1)
+        pool1 = tf.keras.layers.MaxPooling2D(pool_size=(4, 4))
+        self.conv_layers.append(pool1)
+        conv2 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 3, activation='relu')
+        self.conv_layers.append(conv2)
+        pool2 = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))
+        self.conv_layers.append(pool2)
         
         self.hidden_layers = []
         for idx in range(self.num_layers):
@@ -459,25 +473,25 @@ class MADDPGCriticConvNetwork(object):
         self.output_layer = tf.keras.layers.Dense(1, activation='linear',
                                                   name='ag{}crit_out'.format(agent_index))
         
-        strategy = tf.distribute.MirroredStrategy()
-        with strategy.scope():
-            # connect layers
-            x = tf.keras.layers.Concatenate(axis=0)(self.obs_input_n)
-            for idx in range(len(self.conv_layers)):
-                x = self.conv_layers[idx](x)
-            
-            x = tf.keras.layers.Flatten()(x)
-            x = self.input_concat_layer([x] + [self.input_concat_layer(self.act_input_n)])  # ここでactionを結合する
-            
-            for idx in range(len(self.hidden_layers)):
-                x = self.hidden_layers[idx](x)
-            
-            x = self.output_layer(x)
-            
-            self.model = tf.keras.Model(inputs=self.obs_input_n + self.act_input_n,  # list concatenation
-                                        outputs=[x])
-            self.model.compile(self.optimizer, loss='mse')
-            # self.model.summary()
+        # strategy = tf.distribute.MirroredStrategy()
+        # with strategy.scope():
+        # connect layers
+        x = tf.keras.layers.Concatenate(axis=0)(self.obs_input_n)
+        for idx in range(len(self.conv_layers)):
+            x = self.conv_layers[idx](x)
+        
+        x = tf.keras.layers.Flatten()(x)
+        x = self.input_concat_layer([x] + [self.input_concat_layer(self.act_input_n)])  # ここでactionを結合する
+        
+        for idx in range(len(self.hidden_layers)):
+            x = self.hidden_layers[idx](x)
+        
+        x = self.output_layer(x)
+        
+        self.model = tf.keras.Model(inputs=self.obs_input_n + self.act_input_n,  # list concatenation
+                                    outputs=[x])
+        self.model.compile(self.optimizer, loss='mse')
+        self.model.summary()
 
     def predict(self, obs_n, act_n):
         """
@@ -539,7 +553,7 @@ class MADDPGCriticConvNetwork(object):
 # LSTM層を追加したポリシー
 class MADDPGPolicyLstmNetwork(object):
     def __init__(self, num_layers, units_per_layer, lr, obs_n_shape, act_shape, act_type,
-                 gumbel_temperature, q_network, agent_index, num_Os):
+                 gumbel_temperature, q_network, agent_index):
         """
         Implementation of the policy network, with optional gumbel softmax activation at the final layer.
         """
@@ -558,22 +572,25 @@ class MADDPGPolicyLstmNetwork(object):
         self.clip_norm = 0.5
 
         self.optimizer = tf.keras.optimizers.Adam(lr=self.lr)
-
-        ### set up network structure
-        self.obs_input = tf.keras.layers.Input(shape=self.obs_n_shape[agent_index])
+        self.input_concat_layer = tf.keras.layers.Concatenate()
         
-        self.conv_layers = []
-        # layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu', input_shape=self.obs_n_shape[agent_index][1:])
-        layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu')
-        self.conv_layers.append(layer1)
-        layer2 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 3, activation='relu')
-        self.conv_layers.append(layer2)
+        self.max_num_O = 3
+        self.obs_main_shape = self.obs_n_shape[agent_index] - 2 * self.max_num_O  # 最初からmaxの分引いたものをshapeとする
+        self.obs_Os_shape = np.array([self.max_num_O, 2])  # maxで3(障害物の数)*2(各座標)のarrayを想定
+        
+        ### set up network structure
+        self.obs_input_main = tf.keras.layers.Input(shape=self.obs_main_shape)
+        self.obs_input_Os = tf.keras.layers.Input(shape=self.obs_Os_shape)
+        
+        self.masking_layer = tf.keras.layers.Masking(mask_value=-10., input_shape=self.obs_Os_shape)
+        self.LSTM_layer = tf.keras.layers.LSTM(16)
         
         self.hidden_layers = []
         for idx in range(self.num_layers):
             layer = tf.keras.layers.Dense(units_per_layer, activation='relu',
                                           name='ag{}pol_hid{}'.format(agent_index, idx))
             self.hidden_layers.append(layer)
+            
 
         if self.use_gumbel:
             self.output_layer = tf.keras.layers.Dense(self.act_shape, activation='linear',
@@ -583,17 +600,17 @@ class MADDPGPolicyLstmNetwork(object):
                                                       name='ag{}_output'.format(agent_index))
 
         # connect layers
-        x = self.obs_input
-        for idx in range(len(self.conv_layers)):
-            x = self.conv_layers[idx](x)
+        x = self.obs_input_Os
+        x = self.masking_layer(x)
+        x = self.LSTM_layer(x)
+        x = self.input_concat_layer([x] + [self.obs_input_main])
         
-        x = tf.keras.layers.Flatten()(x)
         for idx in range(len(self.hidden_layers)):
             x = self.hidden_layers[idx](x)
         
         x = self.output_layer(x)
         
-        self.model = tf.keras.Model(inputs=[self.obs_input], outputs=[x])
+        self.model = tf.keras.Model(inputs=[self.obs_input_main] + [self.obs_input_Os], outputs=[x])
 
     @classmethod
     def gumbel_softmax_sample(cls, logits):
@@ -610,11 +627,14 @@ class MADDPGPolicyLstmNetwork(object):
         """
         Performs a simple forward pass through the NN.
         """
-        x = obs
-        for idx in range(len(self.conv_layers)):
-            x = self.conv_layers[idx](x)
-        
-        x = tf.keras.layers.Flatten()(x)
+        obs_main = obs[:, :-2 * self.max_num_O]  # 障害物以外の情報
+        obs_Os_flat = obs[:, -2 * self.max_num_O:]  # 障害物の情報
+        obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, 2))
+                
+        x = self.input_concat_layer([obs_Os])
+        x = self.masking_layer(x)
+        x = self.LSTM_layer(x)
+        x = self.input_concat_layer([x] + [obs_main])
         for idx in range(len(self.hidden_layers)):
             x = self.hidden_layers[idx](x)
         
@@ -638,7 +658,7 @@ class MADDPGPolicyLstmNetwork(object):
                 act_n[self.agent_index] = self.gumbel_softmax_sample(logits)
             else:
                 act_n[self.agent_index] = x
-            q_value = self.q_network._predict_internal(obs_n + act_n)
+            q_value = self.q_network._predict_internal(obs_n, act_n)
             policy_regularization = tf.math.reduce_mean(tf.math.square(x))
             loss = -tf.math.reduce_mean(q_value) + 1e-3 * policy_regularization  # gradient plus regularization
 
@@ -666,22 +686,25 @@ class MADDPGCriticLstmNetwork(object):
 
         # set up layers
         # each agent's action and obs are treated as separate inputs
-        self.obs_input_n = []
+        self.obs_input_n_main = []
+        self.obs_input_n_Os = []
+        
+        self.max_num_O = 3
+        self.obs_main_shape = self.obs_shape_n[agent_index] - 2 * self.max_num_O  # 最初からmaxの分引いたものをshapeとする
+        self.obs_Os_shape = np.array([self.max_num_O, 2])  # maxで3(障害物の数)*2(各座標)のarrayを想定
+        
         for idx, shape in enumerate(self.obs_shape_n):
-            self.obs_input_n.append(tf.keras.layers.Input(shape=shape, name='obs_in' + str(idx)))
+            self.obs_input_n_main.append(tf.keras.layers.Input(shape=self.obs_main_shape, name='obs_in' + str(idx)))
+            self.obs_input_n_Os.append(tf.keras.layers.Input(shape=self.obs_Os_shape, name='obs_in_Os' + str(idx)))
 
         self.act_input_n = []
         for idx, shape in enumerate(self.act_shape_n):
             self.act_input_n.append(tf.keras.layers.Input(shape=shape, name='act_in' + str(idx)))
 
         self.input_concat_layer = tf.keras.layers.Concatenate()
-
-        self.conv_layers = []
-        # layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu', input_shape=self.obs_n_shape[agent_index][1:])
-        layer1 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 5, activation='relu')
-        self.conv_layers.append(layer1)
-        layer2 = tf.keras.layers.Conv2D(filters = 32, kernel_size = 3, activation='relu')
-        self.conv_layers.append(layer2)
+        
+        self.masking_layer = tf.keras.layers.Masking(mask_value=-10., input_shape=self.obs_Os_shape)
+        self.LSTM_layer = tf.keras.layers.LSTM(16)
         
         self.hidden_layers = []
         for idx in range(self.num_layers):
@@ -691,21 +714,21 @@ class MADDPGCriticLstmNetwork(object):
         
         self.output_layer = tf.keras.layers.Dense(1, activation='linear',
                                                   name='ag{}crit_out'.format(agent_index))
-
-        # connect layers
-        x = self.input_concat_layer(self.obs_input_n)
-        for idx in range(len(self.conv_layers)):
-            x = self.conv_layers[idx](x)
         
-        x = tf.keras.layers.Flatten()(x)
-        x = self.input_concat_layer([x] + [self.input_concat_layer(self.act_input_n)])  # ここでactionを結合する
+        # connect layers
+        # x = self.input_concat_layer([self.obs_input_n_Os])
+        x = self.obs_input_n_Os[0]  # globalで等しい情報については重ねない → 効率的に学習できるのでは
+        x = self.masking_layer(x)
+        x = self.LSTM_layer(x)
+        x = self.input_concat_layer([self.input_concat_layer(self.obs_input_n_main)] + [x] 
+                                    + [self.input_concat_layer(self.act_input_n)])
         
         for idx in range(len(self.hidden_layers)):
             x = self.hidden_layers[idx](x)
         
         x = self.output_layer(x)
         
-        self.model = tf.keras.Model(inputs=self.obs_input_n + self.act_input_n,  # list concatenation
+        self.model = tf.keras.Model(inputs=self.obs_input_n_main + self.obs_input_n_Os + self.act_input_n,  # list concatenation
                                     outputs=[x])
         self.model.compile(self.optimizer, loss='mse')
         # self.model.summary()
@@ -721,12 +744,21 @@ class MADDPGCriticLstmNetwork(object):
         """
         Internal function, because concatenation can not be done in tf.function
         """
-        x = self.input_concat_layer(obs_n)
-        for idx in range(len(self.conv_layers)):
-            x = self.conv_layers[idx](x)
+        obs_main_n = []
+        obs_Os_n = []
+        for idx, obs in enumerate(obs_n):
+            obs_main = obs[:, :-2 * self.max_num_O]  # 障害物以外の情報
+            obs_Os_flat = obs[:, -2 * self.max_num_O:]  # 障害物の情報
+            obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, 2))
+    
+            obs_main_n.append(obs_main)
+            obs_Os_n.append(obs_Os)
         
-        x = tf.keras.layers.Flatten()(x)
-        x = self.input_concat_layer([x] + [self.input_concat_layer(act_n)])  # ここでactionを結合する
+        # x = self.input_concat_layer(obs_Os_n)
+        x = obs_Os_n[0]
+        x = self.masking_layer(x)
+        x = self.LSTM_layer(x)
+        x = self.input_concat_layer([self.input_concat_layer(obs_main_n)] + [x] + [self.input_concat_layer(act_n)])  # ここでactionを結合する
         
         for idx in range(len(self.hidden_layers)):
             x = self.hidden_layers[idx](x)
@@ -746,12 +778,22 @@ class MADDPGCriticLstmNetwork(object):
         Internal function, because concatenation can not be done inside tf.function
         """
         with tf.GradientTape() as tape:
-            x = self.input_concat_layer(obs_n)
-            for idx in range(len(self.conv_layers)):
-                x = self.conv_layers[idx](x)
+            obs_main_n = []
+            obs_Os_n = []
+            for idx, obs in enumerate(obs_n):
+                obs_main = obs[:, :-2 * self.max_num_O]  # 障害物以外の情報
+                obs_Os_flat = obs[:, -2 * self.max_num_O:]  # 障害物の情報
+                obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, 2))
+        
+                obs_main_n.append(obs_main)
+                obs_Os_n.append(obs_Os)
             
-            x = tf.keras.layers.Flatten()(x)
-            x = self.input_concat_layer([x] + [self.input_concat_layer(act_n)])  # ここでactionを結合する
+            # x = self.input_concat_layer(obs_n)
+            x = obs_Os_n[0]
+            x = self.masking_layer(x)
+            x = self.LSTM_layer(x)
+            x = self.input_concat_layer([self.input_concat_layer(obs_main_n)] +
+                                        [x] + [self.input_concat_layer(act_n)])  # ここでactionを結合する    
             
             for idx in range(len(self.hidden_layers)):
                 x = self.hidden_layers[idx](x)
