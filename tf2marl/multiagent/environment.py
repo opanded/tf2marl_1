@@ -27,7 +27,7 @@ class MultiAgentEnv(gym.Env):
         self.info_callback = info_callback
         self.done_callback = done_callback
         # environment parameters
-        self.discrete_action_space = False
+        self.discrete_action_space = True
         # if true, action is a number 0...N, otherwise action is a one-hot N-dimensional vector
         self.discrete_action_input = False
         # if true, even the action is continuous, action will be performed discretely
@@ -115,9 +115,9 @@ class MultiAgentEnv(gym.Env):
 
         return obs_n, reward_n, done_n, info_n
 
-    def reset(self, is_replay_epi):
+    def reset(self):
         # reset world
-        self.dest, self.rho_g, self.__calc_F_COM, pos_dict = self.reset_callback(self.world, is_replay_epi)
+        self.dest, self.rho_g, self.__calc_F_COM, pos_dict = self.reset_callback(self.world)
         # reset renderer
         self._reset_render()
         # record observations for each agent

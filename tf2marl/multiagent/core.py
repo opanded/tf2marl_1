@@ -30,7 +30,7 @@ class Entity(object):
         # name 
         self.name = ''
         # properties:
-        self.size = 0.075
+        self.size = 0.1
         # entity can move / be pushed
         self.movable = False
         # entity collides with others
@@ -87,7 +87,7 @@ class Follower(Entity):
         # 微小な値
         self.delta = 10e-2
         # フォロワ間作用の係数
-        self.k_FF_coh = 2.5; self.k_FF_col = 3; self.k_FF_bar = 100;
+        self.k_FF_coh = 2.25; self.k_FF_col = 3; self.k_FF_bar = 100;
         # リーダーフォロワ間の係数
         self.k_FL_col = 2; self.k_FL_bar = 100;   
         # フォロワ-障害物間作用の係数
