@@ -10,6 +10,8 @@ from numpy import linalg as LA
 from collections import deque
 import copy
 import random
+import cv2
+import tensorflow as tf
 
 class Scenario(BaseScenario):   
     def __init__(self):
@@ -34,7 +36,9 @@ class Scenario(BaseScenario):
             L.silent = True
             L.front = True if i < self.num_front_Ls else False  # 最初の数体を前方のリーダーとする
             if L.front: L.color = np.array([1, 0.5, 0])
-            else: L.color = np.array([1, 0, 0])
+            else: 
+                if i == 0: L.color = np.array([1, 0, 0])
+                else: L.color = np.array([1, 0.5, 0])
         # add Followers
         world.followers = [Follower() for i in range(self.num_Fs)]
         for i, F in enumerate(world.followers):
@@ -56,6 +60,11 @@ class Scenario(BaseScenario):
         self.max_dis_to_O = 5. 
         # make initial conditions
         self.reset_world(world)
+        
+        # observationの画像について
+        self.height = self.width = 800
+        self.pix_len = 20 / self.height  # 画像の1辺を20mと定義 -> 400pixなら 0.05m/pix
+        
         return world
     
     def reset_world(self, world, is_replay_epi = False):
@@ -69,35 +78,21 @@ class Scenario(BaseScenario):
             ### ↓目的地の座標↓ ###
             # sign_x = self.funcs._make_rand_sign(); sign_y = self.funcs._make_rand_sign()
             # sign_y = 1
-            
-            # 段階的に目的地を遠くする
-            # if epi_counter <= self.max_epi_len / 3:
-            #     scale = 2
-            # elif epi_counter <= 2 * self.max_epi_len / 3:
-            #     scale = 4
-            # else: scale = 6
-            
-            # self.des = np.array([sign_x * scale + (scale / 3) * (2 * np.random.rand() - 1),
-            #                       sign_y * scale + (scale / 3) * np.random.rand()])
-            
             # 真ん中に目的地を置くパターン
             self.des = np.array([0, 0])
             ### ↑目的地の座標↑ ###
+    
+            self.F_pos = self.funcs._set_circle_F_pos(world, self.ini_dis_to_des, self.angle_des) 
+            # self.F_pos = self.funcs._set_F_pos(world) 
+            self.front_L_pos = self.funcs._set_front_L_pos(world, self.F_pos, self.num_front_Ls)
+            self.back_L_pos = self.funcs._set_circle_back_L_pos(world, self.ini_dis_to_des, self.angle_des)
+            # self.back_L_pos = self.funcs._set_back_L_pos_st1(world, self.F_pos, self.num_back_Ls)   
+            self.O_pos = self.funcs._set_O_pos_st1(world, self.F_pos, self.des)
             
-            # replayでない場合のみランダムに初期値を設定する
-            if not is_replay_epi:
-                self.F_pos = self.funcs._set_circle_F_pos(world, self.ini_dis_to_des, self.angle_des) 
-                # self.F_pos = self.funcs._set_F_pos(world) 
-                self.front_L_pos = self.funcs._set_front_L_pos(world, self.F_pos, self.num_front_Ls)
-                self.back_L_pos = self.funcs._set_circle_back_L_pos(world, self.ini_dis_to_des, self.angle_des)
-                # self.back_L_pos = self.funcs._set_back_L_pos_st1(world, self.F_pos, self.num_back_Ls)   
-                self.O_pos = self.funcs._set_O_pos_st1(world, self.F_pos, self.des)
-                
-                # rotate F_pos
-                rotate_angle = np.radians(random.randint(-180, 180))
-                F_width = world.followers[0].r_F["r4"]
-                self.F_pos = self.funcs._rotate_axis(self.F_pos, F_width, rotate_angle)
-                    
+            # rotate F_pos
+            rotate_angle = np.radians(random.randint(-180, 180))
+            F_width = world.followers[0].r_F["r4"]
+            self.F_pos = self.funcs._rotate_axis(self.F_pos, F_width, rotate_angle)
         else: 
             rand = 3 * np.random.rand()
             self.des = np.array([4.884644702315025455e+00, 4.619343504949231516e+00 + rand])
@@ -116,11 +111,27 @@ class Scenario(BaseScenario):
             F_width = world.followers[0].r_F["r4"]
             self.F_pos = self.funcs._rotate_axis(self.F_pos, F_width, rotate_angle)
             
-        # 一定の確率でリーダーのポジションを入れ替える
+        # # 一定の確率でリーダーのポジションを入れ替える, 2台の時
         if self.funcs._make_rand_sign() == 1:
-                tmp = self.back_L_pos[0]
-                self.back_L_pos[0] = self.back_L_pos[1]
-                self.back_L_pos[1] = tmp
+           tmp = self.back_L_pos[0]
+           self.back_L_pos[0] = self.back_L_pos[1]
+           self.back_L_pos[1] = tmp
+        
+        # 一定の確率でリーダーのポジションを入れ替える, 3台の時
+        # thre = np.random.rand()
+        # if thre <= 0.25:
+        #     tmp = self.back_L_pos[0]
+        #     self.back_L_pos[0] = self.back_L_pos[1]
+        #     self.back_L_pos[1] = tmp
+        # elif thre <= 0.5:
+        #     tmp = self.back_L_pos[1]
+        #     self.back_L_pos[1] = self.back_L_pos[2]
+        #     self.back_L_pos[2] = tmp
+        # elif thre <= 0.75:
+        #     tmp = self.back_L_pos[2]
+        #     self.back_L_pos[2] = self.back_L_pos[0]
+        #     self.back_L_pos[0] = tmp
+        # else: pass
         
         pos_dict = {"follower": copy.deepcopy(self.F_pos), "front_leader": copy.deepcopy(self.front_L_pos),
                     "back_leader": copy.deepcopy(self.back_L_pos), "obstacle": copy.deepcopy(self.O_pos),
@@ -143,41 +154,37 @@ class Scenario(BaseScenario):
 
         # 観測用のリストの用意
         self.max_len = 2
-        self.L_to_COM_deques = []
+        self.COM_to_Os_deques = []
         self.L_to_Fs_deques = []
         self.L_to_Ls_deques = []
         self.L_to_Os_deques = []
         for i in range(self.num_Ls):
-            L_to_COM_deque = deque(maxlen = self.max_len)
+            COM_to_O_deque = deque(maxlen = self.max_len)
             L_to_Fs_deque = deque(maxlen = self.max_len)
             L_to_Ls_deque = deque(maxlen = self.max_len)
             L_to_Os_deque = deque(maxlen = self.max_len)
             for j in range(self.max_len):
-                COM_pos_tmp = []; Fs_pos_tmp = []; Ls_pos_tmp = []; Os_pos_tmp = [];
-                COM_pos_tmp.append(np.array([0, 0]))
+                Fs_pos_tmp = []; Ls_pos_tmp = []; Os_pos_tmp = []
                 for l in range(len(world.agents)-1): 
                     Ls_pos_tmp.append(np.array([0, 0]))
                 for f in range(len(world.followers)): 
                     Fs_pos_tmp.append(np.array([0, 0]))
                 for o in range(len(world.obstacles)): 
                     Os_pos_tmp.append(np.array([0, 0]))
-                L_to_COM_deque.append(COM_pos_tmp)
+                COM_to_O_deque.append(Os_pos_tmp)
                 L_to_Ls_deque.append(Ls_pos_tmp)
                 L_to_Fs_deque.append(Fs_pos_tmp)
                 L_to_Os_deque.append(Os_pos_tmp)
             
-            self.L_to_COM_deques.append(L_to_COM_deque)
+            self.COM_to_Os_deques.append(COM_to_O_deque)
             self.L_to_Fs_deques.append(L_to_Fs_deque)
             self.L_to_Ls_deques.append(L_to_Ls_deque)
             self.L_to_Os_deques.append(L_to_Os_deque)
             
         # 一番遠いフォロワの距離
         self.max_dis_old = 0; self.max_dis_idx = 0; self.max_dis_idx_old = 0
-
-        self.is_goal_old = False
+        # ゴールまでの距離
         self.dis_to_des_old = self.funcs._calc_dis_to_des(world, self.des)
-        # 分裂の報酬のための変数
-        self.is_div_old = False
         # カウンターの用意
         self.counter = 0
         self.dis_deque = deque([0, 0], maxlen = 2)
@@ -221,12 +228,7 @@ class Scenario(BaseScenario):
             
             # 分裂に関する報酬
             is_div = self.funcs._chech_div(world)
-            if not is_div and not self.is_div_old: self.R_div = 0  # 分裂していない状態が続くとき
-            elif is_div and self.is_div_old: self.R_div = 0  # 分裂している状態が続くとき
-            elif is_div and not self.is_div_old: self.R_div = - 20  # 分裂したとき
-            else: self.R_div = 5  # 分裂から復帰したとき
-            # 値の更新
-            self.is_div_old = is_div
+            if is_div: self.R_div = - 20  # 分裂したとき
             
             # リーダーがフォロワから離れすぎないための報酬
             min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
@@ -237,7 +239,7 @@ class Scenario(BaseScenario):
             # リーダーが後ろ側に回り込むための報酬
             L_dis_to_des = LA.norm(self.des - L.state.p_pos)
             if L_dis_to_des < dis_to_des:
-                self.R_back = -0.5 * (dis_to_des - L_dis_to_des)
+                self.R_back = - 0.5 * (dis_to_des - L_dis_to_des)
             else: self.R_back = 0
             
             # G_to_far_fol = world.followers[self.max_dis_idx].state.p_pos - self.des
@@ -298,122 +300,79 @@ class Scenario(BaseScenario):
         
     def observation(self, L, world):
         i = int(L.name.replace('leader_', ''))
+        if i < self.num_front_Ls + 1:  # 1台目のリーダー
+            F_COM = self.funcs._calc_F_COM(world)
+            self.COM_to_des = self.des - F_COM
+            self.COM_to_des = self.funcs._coord_trans(self.COM_to_des)
+            self.COM_to_des[0] /= self.max_dis_to_des  # 距離の正規化
+            
+            COM_to_Os = []
+            for O in world.obstacles:
+                COM_to_O = O.state.p_pos - F_COM
+                COM_to_O = self.funcs._coord_trans(COM_to_O)
+                COM_to_O[0] /= self.max_dis_to_O if COM_to_O[0] < self.max_dis_to_O else COM_to_O[0]
+                COM_to_Os.append(COM_to_O)
+            self.COM_to_Os_deques[0].append(COM_to_Os)
+            
+            # mask用の配列を用意
+            mask_COM_to_O_list = []
+            for idx in range(3 - self.num_Os):
+                mask_COM_to_O_list.append(np.full((2, ), -10., np.float32))
         
-        # F_COM = self.funcs._calc_F_COM(world)
-        # COM_to_des = self.des - F_COM
-        # COM_to_des = self.funcs._coordinate_trans(COM_to_des)
-        # COM_to_des[0] /= self.max_dis_to_des  # 距離の正規化
-
-        # COM_to_O = world.obstacles[0].state.p_pos - F_COM
-        # COM_to_O = self.funcs._coordinate_trans(COM_to_O)
-        # COM_to_O[0] /= self.max_dis_to_O  # 距離の正規化
-        # if COM_to_O[0] >= 1.0: COM_to_O[0] = 1.0
+        L_to_Ls = []
+        for other in world.agents:
+            if L is other: continue 
+            L_to_L = other.state.p_pos - L.state.p_pos
+            L_to_L = self.funcs._coord_trans(L_to_L)
+            L_to_L[0] /= self.max_dis_to_L  if L_to_L[0] < self.max_dis_to_L else L_to_L[0]  # 正規化
+            L_to_Ls.append(L_to_L)
+        self.L_to_Ls_deques[i].append(L_to_Ls)
         
-        # # L_to_COM = F_COM - L.state.p_pos
-        # # L_to_COM = self.funcs._coordinate_trans(L_to_COM)
-        # # self.L_to_COM_deques[i].append([L_to_COM])
-        
-        # L_to_Ls = []
-        # for other in world.agents:
-        #     if L is other: continue 
-        #     L_to_L = other.state.p_pos - L.state.p_pos
-        #     L_to_L = self.funcs._coordinate_trans(L_to_L)
-        #     L_to_Ls.append(L_to_L)
-        # self.L_to_Ls_deques[i].append(L_to_Ls)
-        
-        # L_to_Fs = []
-        # for F in world.followers:
-        #     L_to_F = F.state.p_pos - L.state.p_pos
-        #     L_to_F = self.funcs._coordinate_trans(L_to_F)
-        #     L_to_F[0] /= self.max_dis_to_F  # 距離の正規化, フォロワの距離の正規化はもしかするといらないかも
-        #     if L_to_F[0] >= 1.0: L_to_F[0] = 1.0
-        #     L_to_Fs.append(L_to_F)
-        # # to do: フォロワの並び替えの方法もう少し考える．    
-        # # self.L_to_Fs_deques[i].append(np.sort(L_to_Fs, axis=0).tolist())
+        L_to_Fs = []
+        for F in world.followers:
+            L_to_F = F.state.p_pos - L.state.p_pos
+            L_to_F = self.funcs._coord_trans(L_to_F)
+            L_to_F[0] /= self.max_dis_to_F  if L_to_F[0] < self.max_dis_to_F else L_to_F[0]  # 正規化
+            L_to_Fs.append(L_to_F)
+        # to do: フォロワの並び替えの方法もう少し考える．    
         # self.L_to_Fs_deques[i].append(L_to_Fs)
+        self.L_to_Fs_deques[i].append(np.sort(L_to_Fs, axis=0).tolist())
+        
+        # # Fの順番並べ替え用の配列を用意
+        # if i < self.num_front_Ls + 1:  # 1台目のリーダー
+        #     des_to_Fs = []
+        #     for F in world.followers:
+        #         des_to_F_dis = LA.norm(F.state.p_pos - self.des)
+        #         des_to_Fs.append(des_to_F_dis)
+        #     self.sort_idx = np.argsort(des_to_Fs).tolist()
+        # self.L_to_Fs_deques[i].append(np.array(L_to_Fs)[self.sort_idx].tolist())
         
         # L_to_Os = []
         # for O in world.obstacles: 
         #     L_to_O = O.state.p_pos - L.state.p_pos
-        #     L_to_O = self.funcs._coordinate_trans(L_to_O)
+        #     L_to_O = self.funcs._coord_trans(L_to_O)
+        #     L_to_O[0] /= self.max_dis_to_O if L_to_O[0] < self.max_dis_to_O else L_to_O[0]
         #     L_to_Os.append(L_to_O)
         # self.L_to_Os_deques[i].append(L_to_Os)
         
-        # obs = np.concatenate([COM_to_des] + [COM_to_O] + [L.state.p_vel] \
-        #     + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1]\
-        #     + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1])
+        # obs = np.concatenate([self.COM_to_des]\
+        #     + self.COM_to_Os_deques[0][0] + self.COM_to_Os_deques[0][1]\
+        #     + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1]\
+        #     + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1])
         
-
-        if self.viewer is None:
-            from tf2marl.multiagent import rendering
-            self.viewer = rendering.Viewer(200, 200)
-
-        # create rendering geometry
-        if self.render_geoms is None:
-            from tf2marl.multiagent import rendering
-            self.render_geoms = []
-            self.render_geoms_xform = []
-            for entity in world.entities:
-                geom = rendering.make_circle(entity.size)
-                xform = rendering.Transform()
-                if 'leader' in entity.name:
-                    print(int(entity.name.replace('leader_', '')))
-                    if i == int(entity.name.replace('leader_', '')):
-                        geom.set_color(*entity.color, alpha=0.5)
-                    else: geom.set_color(*np.array([1, 0.5, 0]), alpha=0.5)
-                else:
-                    geom.set_color(*entity.color)
-                geom.add_attr(xform)
-                self.render_geoms.append(geom)
-                self.render_geoms_xform.append(xform)
-            
-            # 目的地を追加
-            geom_des = rendering.make_circle(self.rho_g)
-            geom_des.set_color(*np.array([0.5, 0.5, 0.5]), alpha=0.5) # alphaは透明度を表す
-            xform_des = rendering.Transform()
-            geom_des.add_attr(xform_des)
-            self.render_geoms.append(geom_des)
-            self.render_geoms_xform.append(xform_des)
-            # 重心を追加
-            size = 0.04
-            points = [(size, 0), (0, 1.5 * size), (-size, 0), (0, -1.5 * size)]
-            geom_COM = rendering.make_polygon(points)
-            geom_COM.set_color(*np.array([0, 0.5, 0]), alpha=1) # alphaは透明度を表す
-            xform_COM = rendering.Transform()
-            geom_COM.add_attr(xform_COM)
-            self.render_geoms.append(geom_COM)
-            self.render_geoms_xform.append(xform_COM)
-            
-            # add geoms to viewer
-            self.viewer.geoms = []
-            for geom in self.render_geoms:
-                self.viewer.add_geom(geom)
-
-        # update bounds to center around agent
-        # 原点を表す．agentを原点に固定して周りを相対的に動かすとかでも良さそう．
-        pos = np.zeros(world.dim_p)
-        # pos = self.agents[i].state.p_pos
-        cam_range = 12.5 # 拡大、縮小を決める変数
-        self.viewer.set_bounds(pos[0] - cam_range,pos[0] + cam_range, pos[1]-cam_range, pos[1]+ cam_range)
-        # update geometry positions
-        for e, entity in enumerate(world.entities):
-            self.render_geoms_xform[e].set_translation(*entity.state.p_pos)
-        # 目標値の更新
-        self.render_geoms_xform[len(world.entities)].set_translation(*self.des)
-        # 重心の更新
-        follower_COM = self.funcs._calc_F_COM(world)
-        self.render_geoms_xform[len(world.entities) + 1].set_translation(*follower_COM)
-        obs = self.viewer.render(return_rgb_array = True)
+        obs = np.concatenate([self.COM_to_des] + [L.state.p_vel]\
+            + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1]\
+            + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1]
+            + self.COM_to_Os_deques[0][1] + mask_COM_to_O_list)
         
-        # print(obs.shape)
+        # obs = self.make_img(world)
+        
         return obs
     
     def check_done(self, L, world):
         # goalしたか否か
         dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
         is_goal = self.funcs._check_goal(dis_to_des, self.rho_g)
-        # 衝突が起こっているか否か
-        # is_col = self.funcs._check_col(world)
         # 分裂したか否か
         is_div = self.funcs._chech_div(world)
         # desまでの距離がmaxを超えていないか
@@ -427,3 +386,41 @@ class Scenario(BaseScenario):
         
         if is_goal or is_div or is_exceed or is_exceed_F: return True
         else: return False
+        
+    def make_img(self, world):
+        img = np.full((self.height, self.width, 3), 0, np.uint8)
+        
+        # 目的地を追加
+        cv2.circle(img, center = self._pix_coord(self.des), 
+                   radius = self._pix_radius(self.rho_g), color = (0, 0, 255), thickness = -1)
+        # 重心の追加 -> 長方形で描画する．
+        F_COM = self.funcs._calc_F_COM(world)
+        pts = [self._pix_coord(F_COM - (self.pix_len)), self._pix_coord(F_COM + (self.pix_len))]
+        cv2.rectangle(img, *pts, color = (0, 255, 0), thickness = -1)
+        # エージェントの位置の更新
+        for entity in world.entities:
+            color = entity.color * 255
+            cv2.circle(img, center = self._pix_coord(entity.state.p_pos), 
+                   radius = self._pix_radius(entity.size), color = color.tolist(), thickness = -1)
+        
+        # 画像確認用
+        # import matplotlib.pyplot as plt
+        # plt.imshow(img)
+        # plt.show()
+        
+        # 標準化してnpの配列に戻す
+        img =  np.array(tf.image.per_image_standardization(img))
+        
+        
+        return img
+        
+    def _pix_coord(self, coord):
+        pix_coord = (coord / self.pix_len)
+        pix_coord[0] += (self.height / 2); pix_coord[1] = (- pix_coord[1]) + (self.height / 2)
+
+        return pix_coord.astype(np.int64)
+    
+    def _pix_radius(self, radius):
+        pix_radius = int(radius / self.pix_len)
+        
+        return pix_radius
