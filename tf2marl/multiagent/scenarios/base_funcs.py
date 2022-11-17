@@ -14,12 +14,12 @@ class Basefuncs():
         # 3台ずつ列状に並べる
         n = 3
         m = -(-len(world.followers) // n) # m: 列数，演算子を用いて切り上げをしている
-        F_ref_coordinate = np.array([5 * (2 * np.random.rand() - 1), (2 * np.random.rand() - 1)])
+        F_ref_coord = np.array([5 * (2 * np.random.rand() - 1), (2 * np.random.rand() - 1)])
         F_width = world.followers[0].r_F["r4"]
         for i in range(m): 
             for j in range(n):
-                F_next_coordinate = np.array([F_ref_coordinate[0] + j * F_width, i * F_width]) 
-                F_pos.append(F_next_coordinate)
+                F_next_coord = np.array([F_ref_coord[0] + j * F_width, i * F_width]) 
+                F_pos.append(F_next_coord)
 
         return F_pos    
 
@@ -42,36 +42,36 @@ class Basefuncs():
     def _set_front_L_pos(self, world, F_pos, num_front_Ls):
         front_L_pos = []
         # 左側前方のフォロワを基準にする
-        front_L_ref_coordinate = np.array([F_pos[-1][0], F_pos[-1][1]])
+        front_L_ref_coord = np.array([F_pos[-1][0], F_pos[-1][1]])
         L_width = world.followers[0].r_L["r5d"]
         # 台数分の初期位置を定義する
         for i in range(num_front_Ls):
-            front_leader_next_coordinate = np.array([front_L_ref_coordinate[0] - i * L_width + np.random.rand()\
-                                                    ,front_L_ref_coordinate[1] + L_width * 1.1]) 
-            front_L_pos.append(front_leader_next_coordinate)
+            front_leader_next_coord = np.array([front_L_ref_coord[0] - i * L_width + np.random.rand()\
+                                                    ,front_L_ref_coord[1] + L_width * 1.1]) 
+            front_L_pos.append(front_leader_next_coord)
         
         return front_L_pos
 
     def _set_O_pos_st1(self, world, F_pos, des):
         # フォロワと目的地の中点
-        # obstacle_ref_coordinate = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
-        # obstacle_ref_coordinate = F_pos[0] + (self.des - F_pos[0]) / 2
-        O_ref_coordinate = F_pos[0] + 20
+        # obstacle_ref_coord = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
+        # obstacle_ref_coord = F_pos[0] + (self.des - F_pos[0]) / 2
+        O_ref_coord = F_pos[0] + 20
         O_pos = []
         for i in range(len(world.obstacles)):
-            O_next_coordinate = np.array([O_ref_coordinate[0] + i * 1, O_ref_coordinate[1]]) 
-            O_pos.append(O_next_coordinate)
+            O_next_coord = np.array([O_ref_coord[0] + i * 3, O_ref_coord[1]]) 
+            O_pos.append(O_next_coord)
         
         return O_pos
     
     def _set_O_pos_st2(self, world, F_pos, des):
         # フォロワと目的地の中点
-        # obstacle_ref_coordinate = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
-        O_ref_coordinate = F_pos[0] + (des - F_pos[0]) / 2
+        # obstacle_ref_coord = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
+        O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
         O_pos = []
         for i in range(len(world.obstacles)):
-            O_next_coordinate = np.array([O_ref_coordinate[0] + i * 1, O_ref_coordinate[1]]) 
-            O_pos.append(O_next_coordinate)
+            O_next_coord = np.array([O_ref_coord[0] + i * 1, O_ref_coord[1]]) 
+            O_pos.append(O_next_coord)
         
         return O_pos
     
@@ -81,35 +81,35 @@ class Basefuncs():
         # 一定の確率でリーダーをランダムに配置
         if np.random.rand() <= 0.5:
           # 右側後方のフォロワを基準にする
-          back_L_ref_coordinate = np.array([F_pos[0][0], F_pos[0][1]])
+          back_L_ref_coord = np.array([F_pos[0][0], F_pos[0][1]])
           L_width = 1.75 * world.followers[0].r_L["r5d"]
           # 台数分の初期位置を定義する
           for i in range(num_back_Ls):
-              back_L_next_coordinate = np.array([back_L_ref_coordinate[0] + i * L_width + np.random.rand()\
-                                                      ,back_L_ref_coordinate[1] - L_width * 1.1]) 
-              back_L_pos.append(back_L_next_coordinate)
+              back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand()\
+                                                      ,back_L_ref_coord[1] - L_width * 1.1]) 
+              back_L_pos.append(back_L_next_coord)
         else: 
           # 左側前方のフォロワを基準にする
-          back_L_ref_coordinate = np.array([F_pos[-1][0], F_pos[-1][1]])
+          back_L_ref_coord = np.array([F_pos[-1][0], F_pos[-1][1]])
           L_width = 1.75 * world.followers[0].r_L["r5d"]
           # 台数分の初期位置を定義する
           for i in range(num_back_Ls):
-              back_L_next_coordinate = np.array([back_L_ref_coordinate[0] - i * L_width + np.random.rand()\
-                                                      ,back_L_ref_coordinate[1] + L_width * 1.1]) 
-              back_L_pos.append(back_L_next_coordinate)
+              back_L_next_coord = np.array([back_L_ref_coord[0] - i * L_width + np.random.rand()\
+                                                      ,back_L_ref_coord[1] + L_width * 1.1]) 
+              back_L_pos.append(back_L_next_coord)
         
         return back_L_pos
 
     def _set_back_L_pos_st2(self, world, F_pos, num_back_Ls):
         back_L_pos = []
         # 右側後方のフォロワを基準にする
-        back_L_ref_coordinate = np.array([F_pos[0][0], F_pos[0][1]])
-        L_width = 1.75 * world.followers[0].r_L["r5d"]
+        back_L_ref_coord = np.array([F_pos[0][0], F_pos[0][1]])
+        L_width = 1.5 * world.followers[0].r_L["r5d"]
         # 台数分の初期位置を定義する
         for i in range(num_back_Ls):
-            back_L_next_coordinate = np.array([back_L_ref_coordinate[0] + i * L_width + np.random.rand()\
-                                                    ,back_L_ref_coordinate[1] - L_width * 1.1]) 
-            back_L_pos.append(back_L_next_coordinate)
+            back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand()\
+                                                    ,back_L_ref_coord[1] - L_width * 1.1]) 
+            back_L_pos.append(back_L_next_coord)
         
         return back_L_pos
 
@@ -119,9 +119,14 @@ class Basefuncs():
         F_width = world.followers[0].r_F["r4"]
         # 右側後方のフォロワを基準にする
         back_L_pos = [(ini_dis_to_des + F_width + L_width) * np.array([np.cos(angle_des), np.sin(angle_des)])]
-        back_L_next_coordinate = np.array([back_L_pos[0][0] + 2 * F_width * np.sin(angle_des)\
+        # 2台目
+        back_L_next_coord = np.array([back_L_pos[0][0] + 2 * F_width * np.sin(angle_des)\
                                                 ,back_L_pos[0][1] - 2 * F_width * np.cos(angle_des)]) 
-        back_L_pos.append(back_L_next_coordinate)
+        back_L_pos.append(back_L_next_coord)
+        # 3台目
+        back_L_next_coord = np.array([back_L_pos[0][0] - 2 * F_width * np.sin(angle_des)\
+                                                ,back_L_pos[0][1] + 2 * F_width * np.cos(angle_des)]) 
+        back_L_pos.append(back_L_next_coord)
         
         return back_L_pos
     
@@ -148,9 +153,9 @@ class Basefuncs():
 
     ###########################################  For reward, observation, check_done ###########################################
 
-    def _coordinate_trans(self, coordinate_bef: np.array) -> np.array:
-        dis = LA.norm(coordinate_bef)
-        angle = np.arctan2(coordinate_bef[1], coordinate_bef[0])
+    def _coord_trans(self, coord_bef: np.array) -> np.array:
+        dis = LA.norm(coord_bef)
+        angle = np.arctan2(coord_bef[1], coord_bef[0])
         angle /= np.pi  #  角度の正規化
         
         return np.array([dis, angle])
