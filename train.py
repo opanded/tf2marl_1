@@ -8,6 +8,7 @@ import os
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # ここを指定すると一つだけのgpuで計算を行うことができる．
 # os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from typing import List
+import sys
 
 import numpy as np
 import tensorflow as tf
@@ -30,10 +31,19 @@ if list_gpu:
 train_ex = Experiment('sheperding_st1')
 
 ### set global variable ###
-input = int(input("input val(0 -> train, 1 -> display):"))
-if input == 0: is_display = False
-else: is_display = True
-load_dir = "results/sacred/5/models"
+input = int(input("input val(0 -> train, 1 -> add_learning, 2 -> display):"))
+if input == 0: 
+    is_display = False
+    add_learning = False
+elif input == 1: 
+    is_display = False
+    add_learning = True
+elif input == 2: 
+    is_display = True
+    add_learning = False
+else: print("Invalid value!"); sys.exit()
+
+load_dir = "learned_results/sheperding_st1/2/models"
 scenario = 'sheperding_st1'
 ### set global variable ###
 
@@ -46,31 +56,34 @@ def train_config():
     exp_name = 'default'            # name for logging
 
     display = is_display
-    if is_display: restore_fp = load_dir
+    if is_display or add_learning: restore_fp = load_dir
     else: restore_fp = None
                                 
-    save_rate = 200                # frequency to save policy as number of episodes
-    is_replay_epi = False
+    save_rate = 1000                # frequency to save policy as number of episodes
     # Environment
     scenario_name = scenario # environment name
-    num_episodes = 10000            # total episodes
-    max_episode_len = 500           # timesteps per episodes
+    num_episodes = 40000            # total episodes
+    max_episode_len = 600           # timesteps per episodes
 
     # Agent Parameters
     good_policy = 'maddpg'          # policy of "good" agents in env
-    adv_policy = 'masac'           # policy of adversary agents in env
+    adv_policy = 'maddpg'           # policy of adversary agents in env
     # available agent: maddpg, matd3, mad3pg, masac
 
     # General Training Hyperparameters
-    lr = 1e-3                       # learning rate for critics and policies
+    lr = 1e-4                       # learning rate for critics and policies
     gamma = 0.975                   # decay used in environments
-    batch_size = 256               # batch size for training
+    batch_size = 1024               # batch size for training
     num_layers = 2                  # hidden layers per network
     num_units = 32                  # units per hidden layer
 
     update_rate = 100               # update policy after each x steps
     critic_zero_if_done = False     # set the value to zero in terminal steps
-    buff_size = 1e3                # size of the replay buffer
+    buff_size = 1e6                # size of the replay buffer
+    # 学習が回らない場合は予め止める
+    if buff_size <= batch_size * max_episode_len:
+        print("batch_sizeが大きすぎます，正常な値に調整してください")
+        sys.exit()
     tau = 0.01                      # Update for target networks
     hard_max = False                # use Straight-Through (ST) Gumbel
 
@@ -115,7 +128,7 @@ def make_env(scenario_name) -> MultiAgentEnv:
 
 
 @train_ex.main
-def train(_run, exp_name, save_rate, is_replay_epi, display, restore_fp,
+def train(_run, exp_name, save_rate, display, restore_fp,
           hard_max, max_episode_len, num_episodes, batch_size, update_rate,
           use_target_action):
     """
@@ -144,6 +157,7 @@ def train(_run, exp_name, save_rate, is_replay_epi, display, restore_fp,
 
     logger = RLLogger(exp_name, _run, len(agents), env.n_adversaries, save_rate)
 
+
     # Load previous results, if necessary
     if restore_fp is not None:
         print('Loading previous state...')
@@ -151,7 +165,7 @@ def train(_run, exp_name, save_rate, is_replay_epi, display, restore_fp,
             fp = os.path.join(restore_fp, 'agent_{}'.format(ag_idx))
             agent.load(fp)
 
-    obs_n, pos_dict = env.reset(is_replay_epi)
+    obs_n, pos_dict = env.reset()
 
     print('Starting iterations...')
     while True:
@@ -185,7 +199,10 @@ def train(_run, exp_name, save_rate, is_replay_epi, display, restore_fp,
             logger.agent_rewards[ag_idx][-1] += rew
 
         if done:
-            obs_n, pos_dict = env.reset(is_replay_epi)
+            if display:
+                logger.save_demo_result(pos_dict, env.reward_list_all)
+                
+            obs_n, pos_dict = env.reset()
             episode_step = 0
             logger.record_episode_end(agents)
 
@@ -200,8 +217,9 @@ def train(_run, exp_name, save_rate, is_replay_epi, display, restore_fp,
 
         # for displaying learned policies
         if display:
-            # time.sleep(0.025)
-            env.render('rgb_array')[0]
+            time.sleep(0.025)
+            img = env.render('rgb_array')[0]
+            logger.all_frames.append(img)
         # env.render('rgb_array')[0]
 
         # saves logger outputs to a file similar to the way in the original MADDPG implementation
