@@ -476,7 +476,8 @@ class MADDPGCriticConvNetwork(object):
         # strategy = tf.distribute.MirroredStrategy()
         # with strategy.scope():
         # connect layers
-        x = tf.keras.layers.Concatenate(axis=0)(self.obs_input_n)
+        # x = tf.keras.layers.Concatenate(axis=0)(self.obs_input_n)
+        x = self.obs_input_n[0]
         for idx in range(len(self.conv_layers)):
             x = self.conv_layers[idx](x)
         
@@ -504,7 +505,8 @@ class MADDPGCriticConvNetwork(object):
         """
         Internal function, because concatenation can not be done in tf.function
         """
-        x = tf.keras.layers.Concatenate(axis=0)(obs_n)
+        # x = tf.keras.layers.Concatenate(axis=0)(obs_n)
+        x = obs_n[0]
         for idx in range(len(self.conv_layers)):
             x = self.conv_layers[idx](x)
         
@@ -529,7 +531,8 @@ class MADDPGCriticConvNetwork(object):
         Internal function, because concatenation can not be done inside tf.function
         """
         with tf.GradientTape() as tape:
-            x = tf.keras.layers.Concatenate(axis=0)(obs_n)
+            # x = tf.keras.layers.Concatenate(axis=0)(obs_n)
+            x = obs_n[0]
             for idx in range(len(self.conv_layers)):
                 x = self.conv_layers[idx](x)
             

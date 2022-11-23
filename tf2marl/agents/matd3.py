@@ -4,7 +4,7 @@ import tensorflow as tf
 from gym import Space
 
 from tf2marl.agents.AbstractAgent import AbstractAgent
-from tf2marl.agents.maddpg import MADDPGCriticNetwork, MADDPGPolicyNetwork
+from tf2marl.agents.maddpg import MADDPGCriticNetwork, MADDPGCriticLstmNetwork, MADDPGPolicyNetwork, MADDPGPolicyLstmNetwork
 from tf2marl.common.util import space_n_to_shape_n
 
 
@@ -23,17 +23,17 @@ class MATD3Agent(AbstractAgent):
                          prioritized_replay_eps=prioritized_replay_eps)
 
         act_type = type(act_space_n[0])
-        self.critic_1 = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
-        self.critic_1_target = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_1 = MADDPGCriticLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_1_target = MADDPGCriticLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
         self.critic_1_target.model.set_weights(self.critic_1.model.get_weights())
 
-        self.critic_2 = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
-        self.critic_2_target = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_2 = MADDPGCriticLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_2_target = MADDPGCriticLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
         self.critic_2_target.model.set_weights(self.critic_2.model.get_weights())
 
-        self.policy = MADDPGPolicyNetwork(2, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        self.policy = MADDPGPolicyLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
                                           self.critic_1, agent_index)
-        self.policy_target = MADDPGPolicyNetwork(2, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        self.policy_target = MADDPGPolicyLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
                                                  self.critic_1, agent_index)
         self.policy_target.model.set_weights(self.policy.model.get_weights())
 
@@ -65,9 +65,17 @@ class MATD3Agent(AbstractAgent):
         Implements the updates of the target networks, which slowly follow the real network.
         """
         def update_target_network(net: tf.keras.Model, target_net: tf.keras.Model):
-            net_weights = np.array(net.get_weights())
-            target_net_weights = np.array(target_net.get_weights())
-            new_weights = tau * net_weights + (1.0 - tau) * target_net_weights
+            # net_weights = np.array(net.get_weights())
+            # target_net_weights = np.array(target_net.get_weights())
+            # new_weights = tau * net_weights + (1.0 - tau) * target_net_weights
+            # numpyのwarningが出るので以下に書き換え
+            net_weights = net.get_weights()
+            target_net_weights = target_net.get_weights()
+            new_weights = []
+            for net_weight, target_net_weight in zip(net_weights, target_net_weights):
+                new_weight = tau * net_weight + (1.0 - tau) * target_net_weight    
+                new_weights.append(new_weight)
+            
             target_net.set_weights(new_weights)
 
         update_target_network(self.critic_1.model, self.critic_1_target.model)
