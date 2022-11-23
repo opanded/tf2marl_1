@@ -23,8 +23,6 @@ class Scenario(BaseScenario):
         self.num_Fs = 6
         self.num_Os = 1
         self.funcs = Basefuncs()
-        self.viewer = None
-        self.render_geoms = None
     
     def make_world(self):
         world = World()
@@ -61,13 +59,9 @@ class Scenario(BaseScenario):
         # make initial conditions
         self.reset_world(world)
         
-        # observationの画像について
-        self.height = self.width = 800
-        self.pix_len = 20 / self.height  # 画像の1辺を20mと定義 -> 400pixなら 0.05m/pix
-        
         return world
     
-    def reset_world(self, world, is_replay_epi = False):
+    def reset_world(self, world):
         # goal到達時の閾値 
         self.rho_g = 1.0
         self.angle_des = np.radians(random.randint(0, 359))
@@ -183,11 +177,22 @@ class Scenario(BaseScenario):
             
         # 一番遠いフォロワの距離
         self.max_dis_old = 0; self.max_dis_idx = 0; self.max_dis_idx_old = 0
+        # リーダーから一番近いフォロワまでの距離
+        self.min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
         # ゴールまでの距離
         self.dis_to_des_old = self.funcs._calc_dis_to_des(world, self.des)
+        self.dis_to_des = self.dis_to_des_old
+        self.is_goal = False
+        # 分裂について
+        self.is_div = False
         # カウンターの用意
         self.counter = 0
         self.dis_deque = deque([0, 0], maxlen = 2)
+        # 障害物用の変数
+        self.is_close_to_O = False
+        self.min_dis_to_Os_old = []
+        for _ in range(self.num_Os):
+            self.min_dis_to_Os_old.append(self.funcs._calc_Fs_min_dis_to_O(world))
         # 報酬の用意
         self.R_F_far = 0; self.R_g = 0; self.R_div = 0; self.R_L_close = 0;
         self.R_col = 0; self.R_O = 0; self.R_back = 0
@@ -197,49 +202,43 @@ class Scenario(BaseScenario):
     def reward(self, L, world):
         if int(L.name.replace('leader_', '')) < self.num_front_Ls + 1:  # 1台目のリーダー
             # 一番遠いフォロワをゴールに近づける報酬
-            if L.front: self.R_F_far = 0
+            # Fs_dis_to_des = np.array(self.funcs._calc_Fs_dis_to_des(world, self.des))
+            # max_dis = Fs_dis_to_des.max(); self.max_dis_idx =  np.argmax(Fs_dis_to_des)
+            # if self.max_dis_idx == self.max_dis_idx_old:
+            #     # 1stepあたりのmaxの移動量で正規化
+            #     if (self.max_dis_old - max_dis) > 1e-4: self.R_F_far = 5 * (self.max_dis_old - max_dis)
+            #     else: self.R_F_far = 0
+            # else: self.R_F_far = 0
+            # self.max_dis_old = max_dis; self.max_dis_idx_old = self.max_dis_idx
+            self.R_F_far = 0
+            
+            # 重心をゴールに近づける報酬
+            self.dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
+            if self.dis_to_des > 2.0:
+                self.R_g = 10 * (self.dis_to_des_old - self.dis_to_des)
             else:
-                Fs_dis_to_des = np.array(self.funcs._calc_Fs_dis_to_des(world, self.des))
-                max_dis = Fs_dis_to_des.max(); self.max_dis_idx =  np.argmax(Fs_dis_to_des)
-                if self.max_dis_idx == self.max_dis_idx_old:
-                    # 1stepあたりのmaxの移動量で正規化
-                    if (self.max_dis_old - max_dis) > 1e-4: self.R_F_far = 5 * (self.max_dis_old - max_dis)
-                    else: self.R_F_far = 0
-                else: self.R_F_far = 0
-                self.max_dis_old = max_dis; self.max_dis_idx_old = self.max_dis_idx
-                
-            # goalまでの距離に関する報酬
-            dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
-            if L.front:  # 前方のエージェント -> 衝突回避の報酬を大きく
-                if (self.dis_to_des_old - dis_to_des) > 1e-4 : self.R_g = 20 * (self.dis_to_des_old - dis_to_des)
-                else: self.R_g = - 1
-                self.R_g = 0
-            else: # 後方のエージェント -> ゴールに近づく報酬を大きく
-                if dis_to_des > 2.0:
-                    self.R_g = 5 * (self.dis_to_des_old - dis_to_des)
-                else:
-                    if (self.dis_to_des_old - dis_to_des) > 1e-4:
-                        self.R_g = 5 * (self.dis_to_des_old - dis_to_des)  # denseな報酬
-                    else: self.R_g = -0.1
-            is_goal = self.funcs._check_goal(dis_to_des, self.rho_g)
-            if is_goal: self.R_g = 30
+                if (self.dis_to_des_old - self.dis_to_des) > 1e-4:
+                    self.R_g = 5 * (self.dis_to_des_old - self.dis_to_des)  # denseな報酬
+                else: self.R_g = -0.1
+            self.is_goal = self.funcs._check_goal(self.dis_to_des, self.rho_g)
+            if self.is_goal: self.R_g = 30
             # 値の更新
-            self.dis_to_des_old = dis_to_des
+            self.dis_to_des_old = self.dis_to_des
             
             # 分裂に関する報酬
-            is_div = self.funcs._chech_div(world)
-            if is_div: self.R_div = - 20  # 分裂したとき
+            self.is_div = self.funcs._chech_div(world)
+            if self.is_div: self.R_div = - 20  # 分裂したとき
             
             # リーダーがフォロワから離れすぎないための報酬
-            min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
-            if min_dis_to_F > world.followers[0].r_L["r5d"] * 2.0:
-               self.R_L_close = - 0.25 * (min_dis_to_F - world.followers[0].r_L["r5d"])
+            self.min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
+            if self.min_dis_to_F > world.followers[0].r_L["r5d"] * 2.0:
+               self.R_L_close = - 0.25 * (self.min_dis_to_F - world.followers[0].r_L["r5d"])
             else: self.R_L_close = 0
                
             # リーダーが後ろ側に回り込むための報酬
             L_dis_to_des = LA.norm(self.des - L.state.p_pos)
-            if L_dis_to_des < dis_to_des:
-                self.R_back = - 0.5 * (dis_to_des - L_dis_to_des)
+            if L_dis_to_des < self.dis_to_des:
+                self.R_back = - 0.5 * (self.dis_to_des - L_dis_to_des)
             else: self.R_back = 0
             
             # G_to_far_fol = world.followers[self.max_dis_idx].state.p_pos - self.des
@@ -253,32 +252,39 @@ class Scenario(BaseScenario):
             
             # 障害物に近づきすぎないための報酬
             if world.obstacles:
-                min_dis_to_O = self.funcs._calc_Fs_min_dis_to_O(world)
-                if min_dis_to_O < world.followers[0].r_F["r5"] * 1.5:
-                    self.R_O = - 1 / (min_dis_to_O + 1)
-                else: self.R_O = 0
+                self.R_O = 0
+                min_dis_to_Os = self.funcs._calc_Fs_min_dis_to_O(world)
+                for idx, min_dis_to_O in enumerate(min_dis_to_Os):
+                    if 0.575 <= min_dis_to_O < world.followers[0].r_F["r5"] * 1.5:
+                        if self.min_dis_to_Os_old[idx] > min_dis_to_O:
+                            R_O = - 20 * (self.min_dis_to_Os_old[idx] - min_dis_to_O)
+                        else: R_O = 0
+                        if self.is_close_to_O and min_dis_to_O >= world.followers[0].r_F["r5"]:  # 復帰した場合正の報酬を与える
+                            self.is_close_to_O = False
+                            R_O = 5
+                    elif (min_dis_to_O < 0.575) and not self.is_close_to_O: 
+                        R_O = -10
+                        self.is_close_to_O = True
+                    else: R_O = 0
+                    self.R_O += R_O
+                    self.min_dis_to_Os_old[idx] = min_dis_to_O
             else: self.R_O = 0
             
             # 衝突に関する報酬
             is_col = self.funcs._check_col(world)
-            if L.front:  # 前方のエージェント -> 衝突回避の報酬を大きく
-                if is_col: self.R_col = -10
-                else: self.R_col = 0
-            else:
-                if is_col: self.R_col = - 10
-                else: self.R_col = 0
+            if is_col: self.R_col = - 10
+            else: self.R_col = 0
         else:  # 後ろのリーダーの二台目以降
             # リーダーがフォロワから離れすぎないための報酬のみ更新
-            min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
-            if min_dis_to_F > world.followers[0].r_L["r5d"] * 2.0:
-                self.R_L_close = - 0.25 * (min_dis_to_F - world.followers[0].r_L["r5d"])
+            self.min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
+            if self.min_dis_to_F > world.followers[0].r_L["r5d"] * 2.0:
+                self.R_L_close = - 0.25 * (self.min_dis_to_F - world.followers[0].r_L["r5d"])
             else: self.R_L_close = 0
             
-            dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
             # リーダーが後ろ側に回り込むための報酬 
             L_dis_to_des = LA.norm(self.des - L.state.p_pos)  
-            if L_dis_to_des < dis_to_des:
-                self.R_back = - 0.5 * (dis_to_des - L_dis_to_des)
+            if L_dis_to_des < self.dis_to_des:
+                self.R_back = - 0.5 * (self.dis_to_des - L_dis_to_des)
             else: self.R_back = 0 
             
             # G_to_far_fol = world.followers[self.max_dis_idx].state.p_pos - self.des
@@ -315,9 +321,9 @@ class Scenario(BaseScenario):
             self.COM_to_Os_deques[0].append(COM_to_Os)
             
             # mask用の配列を用意
-            mask_COM_to_O_list = []
+            self.mask_COM_to_O_list = []
             for idx in range(3 - self.num_Os):
-                mask_COM_to_O_list.append(np.full((2, ), -10., np.float32))
+                self.mask_COM_to_O_list.append(np.full((2, ), -10., np.float32))
         
         L_to_Ls = []
         for other in world.agents:
@@ -363,64 +369,23 @@ class Scenario(BaseScenario):
         obs = np.concatenate([self.COM_to_des] + [L.state.p_vel]\
             + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1]\
             + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1]
-            + self.COM_to_Os_deques[0][1] + mask_COM_to_O_list)
-        
-        # obs = self.make_img(world)
+            + self.COM_to_Os_deques[0][1] + self.mask_COM_to_O_list)
         
         return obs
     
     def check_done(self, L, world):
         # goalしたか否か
-        dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
-        is_goal = self.funcs._check_goal(dis_to_des, self.rho_g)
+        # dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
+        # is_goal = self.funcs._check_goal(dis_to_des, self.rho_g)
         # 分裂したか否か
-        is_div = self.funcs._chech_div(world)
+        # is_div = self.funcs._chech_div(world)
         # desまでの距離がmaxを超えていないか
-        dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
-        if dis_to_des > self.max_dis_to_des: is_exceed = True
+        if self.dis_to_des > self.max_dis_to_des: is_exceed = True
         else: is_exceed = False
         # Fまでのmin距離がmaxを超えていないか
-        dis_to_min_F = self.funcs._calc_min_dis_to_F(L, world)
-        if dis_to_min_F > self.max_dis_to_F: is_exceed_F = True
+        # self.dis_to_min_F = self.funcs._calc_min_dis_to_F(L, world)
+        if self.min_dis_to_F > self.max_dis_to_F: is_exceed_F = True
         else: is_exceed_F = False
         
-        if is_goal or is_div or is_exceed or is_exceed_F: return True
+        if self.is_goal or self.is_div or is_exceed or is_exceed_F: return True
         else: return False
-        
-    def make_img(self, world):
-        img = np.full((self.height, self.width, 3), 0, np.uint8)
-        
-        # 目的地を追加
-        cv2.circle(img, center = self._pix_coord(self.des), 
-                   radius = self._pix_radius(self.rho_g), color = (0, 0, 255), thickness = -1)
-        # 重心の追加 -> 長方形で描画する．
-        F_COM = self.funcs._calc_F_COM(world)
-        pts = [self._pix_coord(F_COM - (self.pix_len)), self._pix_coord(F_COM + (self.pix_len))]
-        cv2.rectangle(img, *pts, color = (0, 255, 0), thickness = -1)
-        # エージェントの位置の更新
-        for entity in world.entities:
-            color = entity.color * 255
-            cv2.circle(img, center = self._pix_coord(entity.state.p_pos), 
-                   radius = self._pix_radius(entity.size), color = color.tolist(), thickness = -1)
-        
-        # 画像確認用
-        # import matplotlib.pyplot as plt
-        # plt.imshow(img)
-        # plt.show()
-        
-        # 標準化してnpの配列に戻す
-        img =  np.array(tf.image.per_image_standardization(img))
-        
-        
-        return img
-        
-    def _pix_coord(self, coord):
-        pix_coord = (coord / self.pix_len)
-        pix_coord[0] += (self.height / 2); pix_coord[1] = (- pix_coord[1]) + (self.height / 2)
-
-        return pix_coord.astype(np.int64)
-    
-    def _pix_radius(self, radius):
-        pix_radius = int(radius / self.pix_len)
-        
-        return pix_radius
