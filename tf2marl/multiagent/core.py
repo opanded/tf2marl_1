@@ -256,6 +256,7 @@ class World(object):
         # compute actual distance between entities
         delta_pos = entity_a.state.p_pos - entity_b.state.p_pos
         dist = np.sqrt(np.sum(np.square(delta_pos)))
+        if dist < 1e-6: dist = 1e-6
         # minimum allowable distance
         dist_min = entity_a.size + entity_b.size
         # softmax penetration
