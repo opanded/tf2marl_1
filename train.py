@@ -5,7 +5,7 @@ results from the papers.
 
 import time
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # ここを指定すると一つだけのgpuで計算を行うことができる．
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # ここを指定すると一つだけのgpuで計算を行うことができる．
 # os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from typing import List
 import sys
@@ -31,7 +31,7 @@ if list_gpu:
 train_ex = Experiment('sheperding_st1')
 
 ### set global variable ###
-input = int(input("input val(0 -> train, 1 -> add_learning, 2 -> display):"))
+input = int(input("input val[0 -> train, 1 -> add_learning, 2 -> display]:"))
 if input == 0: 
     is_display = False
     add_learning = False
@@ -43,7 +43,7 @@ elif input == 2:
     add_learning = False
 else: print("Invalid value!"); sys.exit()
 
-load_dir = "learned_results/sheperding_st1/2/models"
+load_dir = "learned_results/sheperding_st1/3/models"
 scenario = 'sheperding_st1'
 ### set global variable ###
 
@@ -63,32 +63,32 @@ def train_config():
     # Environment
     scenario_name = scenario # environment name
     num_episodes = 40000            # total episodes
-    max_episode_len = 600           # timesteps per episodes
+    max_episode_len = 650           # timesteps per episodes
 
     # Agent Parameters
-    good_policy = 'maddpg'          # policy of "good" agents in env
-    adv_policy = 'maddpg'           # policy of adversary agents in env
+    good_policy = 'matd3'          # policy of "good" agents in env
+    adv_policy = 'matd3'           # policy of adversary agents in env
     # available agent: maddpg, matd3, mad3pg, masac
 
     # General Training Hyperparameters
     lr = 1e-4                       # learning rate for critics and policies
     gamma = 0.975                   # decay used in environments
-    batch_size = 1024               # batch size for training
-    num_layers = 2                  # hidden layers per network
-    num_units = 32                  # units per hidden layer
+    batch_size = 512               # batch size for training
+    num_layers = 3                  # hidden layers per network
+    num_units = 64                  # units per hidden layer
 
     update_rate = 100               # update policy after each x steps
     critic_zero_if_done = False     # set the value to zero in terminal steps
     buff_size = 1e6                # size of the replay buffer
     # 学習が回らない場合は予め止める
     if buff_size <= batch_size * max_episode_len:
-        print("batch_sizeが大きすぎます，正常な値に調整してください")
+        print("Too big batch size!")
         sys.exit()
     tau = 0.01                      # Update for target networks
     hard_max = False                # use Straight-Through (ST) Gumbel
 
     priori_replay = False           # enable prioritized replay
-    alpha = 0.6                  # alpha value (weights prioritization vs random)
+    alpha = 0.6                     # alpha value (weights prioritization vs random)
     beta = 0.5                      # beta value  (controls importance sampling)
 
     use_target_action = True        # use target action in environment, instead of normal action
@@ -97,8 +97,8 @@ def train_config():
     if good_policy == 'tf2marl':
         policy_update_rate = 2      # Frequency of policy updates, compared to critic
     else:
-        policy_update_rate = 1
-    critic_action_noise_stddev = 0.0  # Added noise in critic updates
+        policy_update_rate = 2
+    critic_action_noise_stddev = 0.2  # Added noise in critic updates
     action_noise_clip = 0.5         # limit for this noise
 
     # MASAC
