@@ -69,8 +69,10 @@ class Basefuncs():
         # obstacle_ref_coord = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
         O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
         O_pos = []
+        O_width = world.followers[0].r_F["r4"] * 5
         for i in range(len(world.obstacles)):
-            O_next_coord = np.array([O_ref_coord[0] + i * 1, O_ref_coord[1]]) 
+            O_next_coord = np.array([O_ref_coord[0] - np.random.rand() + i * O_width, 
+                                     O_ref_coord[1] + (2 * np.random.rand() - 1)]) 
             O_pos.append(O_next_coord)
         
         return O_pos
@@ -193,14 +195,17 @@ class Basefuncs():
         
         return dis_to_des
 
-    #### todo 障害物複数の場合この関数編集する必要あり ####
-    def _calc_Fs_min_dis_to_O(self, world):
-        min_dis_to_O = np.inf
-        for F in world.followers:
-            F_dis_to_O = LA.norm(world.obstacles[0].state.p_pos - F.state.p_pos)
-            if F_dis_to_O < min_dis_to_O: min_dis_to_O = F_dis_to_O
 
-        return min_dis_to_O
+    def _calc_Fs_min_dis_to_O(self, world):
+        min_dis_to_Os = []
+        min_dis_to_O = np.inf
+        for O in world.obstacles:
+            for F in world.followers:
+                F_dis_to_O = LA.norm(O.state.p_pos - F.state.p_pos)
+                if F_dis_to_O < min_dis_to_O: min_dis_to_O = F_dis_to_O
+        min_dis_to_Os.append(min_dis_to_O)
+        
+        return min_dis_to_Os
 
     def _calc_F_COM(self, world):
         F_sum = np.array([0.,0.])
