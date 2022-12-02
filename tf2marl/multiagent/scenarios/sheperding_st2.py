@@ -9,8 +9,7 @@ from multiagent.scenarios.base_funcs import Basefuncs
 from numpy import linalg as LA
 from collections import deque
 import copy
-import cv2
-import tensorflow as tf
+import random
 
 class Scenario(BaseScenario):   
     def __init__(self):
@@ -19,7 +18,7 @@ class Scenario(BaseScenario):
         self.num_back_Ls = 2
         self.num_Ls = self.num_back_Ls + self.num_front_Ls
         self.num_Fs = 6
-        self.num_Os = 3
+        self.num_Os = random.choice([1, 2])
         self.funcs = Basefuncs()
     
     def make_world(self):
@@ -40,36 +39,30 @@ class Scenario(BaseScenario):
         for i, F in enumerate(world.followers):
             F.name = 'follower_%d' % i
             F.collide = True
-            F.movable = True
+            F.movable = False
             F.color = np.array([0, 0, 1])
-        # add obstacles
-        world.obstacles = [Obstacle() for i in range(self.num_Os)]
-        for i, O in enumerate(world.obstacles):
-            O.name = 'obstacle_%d' % i
-            # O.size = 0.1
-            O.collide = True
-            O.movable = True
-            O.color = np.array([0, 0.5, 0])
         self.max_dis_to_des = 15.
         self.max_dis_to_L = 7.5
         self.max_dis_to_F = 7.5
         self.max_dis_to_O = 5. 
+        # リーダー入れ替え用の配列を用意
+        self.rand_idx = [i for i in range(self.num_Ls)]
+        
         # make initial conditions
         self.reset_world(world)
         return world
     
     def reset_world(self, world):
+        # 障害物の数をエピソード毎に変化させる
+        self.num_Os = random.choice([1, 2])
+        # add obstacles
+        world.obstacles = [Obstacle() for i in range(self.num_Os)]
+        
         # goal到達時の閾値 
         self.rho_g = 1.0
-        if self.funcs._make_rand_sign() == 1 or - 1:
+        if self.funcs._make_rand_sign() == 1 or -1:
             # 目的地の座標
-            sign_x = self.funcs._make_rand_sign(); sign_y = self.funcs._make_rand_sign()
-            sign_y = 1
-            scale = 6
             self.des = np.array([0, 7.5])
-            # self.des = np.array([sign_x * scale + (scale / 3) * (2 * np.random.rand() - 1),
-            #                       sign_y * scale + (scale / 3) * np.random.rand()])
-            
             self.F_pos = self.funcs._set_F_pos(world) 
             self.front_L_pos = self.funcs._set_front_L_pos(world, self.F_pos, self.num_front_Ls)
             self.back_L_pos = self.funcs._set_back_L_pos_st2(world, self.F_pos, self.num_back_Ls)
@@ -107,10 +100,12 @@ class Scenario(BaseScenario):
                                     np.array([4.898787262172401569e+00, -2.500000000000000089e+00]) + 0.5 * (2 * np.random.rand() - 1)]
             self.O_pos = [np.array([4.045798136508846454e+00, 2.309671752474615758e+00 + rand])]
         
-        if self.funcs._make_rand_sign() == 1:
-            tmp = self.back_L_pos[0]
-            self.back_L_pos[0] = self.back_L_pos[1]
-            self.back_L_pos[1] = tmp
+        # 一定の確率でリーダーのポジションを入れ替える
+        L_i = random.choice(self.rand_idx); L_j = random.choice(self.rand_idx)
+        if L_i != L_j:
+           tmp = self.back_L_pos[L_i]
+           self.back_L_pos[L_i] = self.back_L_pos[L_j]
+           self.back_L_pos[L_j] = tmp
         
         pos_dict = {"follower": copy.deepcopy(self.F_pos), "front_leader": copy.deepcopy(self.front_L_pos),
                     "back_leader": copy.deepcopy(self.back_L_pos), "obstacle": copy.deepcopy(self.O_pos),
@@ -126,11 +121,18 @@ class Scenario(BaseScenario):
         for i, F in enumerate(world.followers):
             F.state.p_pos = self.F_pos[i]
             F.state.p_vel = np.zeros(world.dim_p)
-        # set obstacles' random initial states   
+        idx = random.choice([0, 1])
         for i, O in enumerate(world.obstacles):
             O.state.p_pos = self.O_pos[i]
-            O.state.p_vel = np.zeros(world.dim_p)
-
+            if i == idx: O.have_vel = True
+            if O.have_vel:
+                O.state.p_vel = np.array([0.2, 0.2])
+            O.name = 'obstacle_%d' % i
+            # O.size = 0.1
+            O.collide = True
+            O.movable = False
+            O.color = np.array([0, 0.5, 0])
+    
         # 観測用のリストの用意
         self.max_len = 2
         self.COM_to_Os_deques = []
@@ -160,48 +162,47 @@ class Scenario(BaseScenario):
             self.L_to_Ls_deques.append(L_to_Ls_deque)
             self.L_to_Os_deques.append(L_to_Os_deque)
         
-        # 一番遠いフォロワの距離
-        self.max_dis_old = 0; self.max_dis_idx = 0; self.max_dis_idx_old = 0
-        # リーダーから一番近いフォロワまでの距離
-        self.min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
-        # ゴールまでの距離
+        # for reward
+        # ゴールから一番遠いフォロワの距離
+        self.max_dis_old = 0; self.max_dis_idx_old = 0
+        # 重心からゴールまでの距離
         self.dis_to_des_old = self.funcs._calc_dis_to_des(world, self.des)
-        self.dis_to_des = self.dis_to_des_old
-        self.is_goal = False
-        # 分裂について
-        self.is_div = False
-        # カウンターの用意
-        self.counter = 0
-        self.dis_deque = deque([0, 0], maxlen = 2)
-        
-        self.is_close_to_O = False
-        self.min_dis_to_Os_old = []
+        # 各リーダーから一番近いフォロワまでの距離
+        self.min_dis_to_F_old = [self.funcs._calc_min_dis_to_F(L, world) for L in world.agents]
+        # 各障害物用の変数
+        self.is_close_to_Os = []; self.min_dis_to_Os_old = []
         for _ in range(self.num_Os):
+            self.is_close_to_Os.append(False)
             self.min_dis_to_Os_old.append(self.funcs._calc_Fs_min_dis_to_O(world))
+        # 衝突判定用の変数
+        self.is_col_old = [False for _ in range(self.num_Ls)]
         
-        # 報酬の用意
-        self.R_F_far = 0; self.R_g = 0; self.R_div = 0; self.R_L_close = 0;
-        self.R_col = 0; self.R_O = 0; self.R_back = 0
+        # for observation
+        # フォロワの重心位置
+        self.F_COM_old = self.funcs._calc_F_COM(world)
+        # 各障害物の位置
+        self.Os_old = [O.state.p_pos for O in world.obstacles]
+        # 1stepの移動の最大値
+        self.max_moving_dis = 2 * world.agents[0].max_speed * world.dt
             
         return self.des, self.rho_g, self.funcs._calc_F_COM, pos_dict
     
     def reward(self, L, world):
         if int(L.name.replace('leader_', '')) < self.num_front_Ls + 1:  # 1台目のリーダー
             # 一番遠いフォロワをゴールに近づける報酬
-            # Fs_dis_to_des = np.array(self.funcs._calc_Fs_dis_to_des(world, self.des))
-            # max_dis = Fs_dis_to_des.max(); self.max_dis_idx =  np.argmax(Fs_dis_to_des)
+            Fs_dis_to_des = np.array(self.funcs._calc_Fs_dis_to_des(world, self.des))
+            max_dis = Fs_dis_to_des.max(); self.max_dis_idx =  np.argmax(Fs_dis_to_des)
             # if self.max_dis_idx == self.max_dis_idx_old:
-            #     # 1stepあたりのmaxの移動量で正規化
-            #     if (self.max_dis_old - max_dis) > 1e-4: self.R_F_far = 5 * (self.max_dis_old - max_dis)
-            #     else: self.R_F_far = 0
+            if (self.max_dis_old - max_dis) > 1e-4: self.R_F_far = 5 * (self.max_dis_old - max_dis)
+            else: self.R_F_far = 0
             # else: self.R_F_far = 0
-            # self.max_dis_old = max_dis; self.max_dis_idx_old = self.max_dis_idx
-            self.R_F_far = 0
+            self.max_dis_old = max_dis 
+            # self.max_dis_idx_old = self.max_dis_idx
             
             # goalまでの距離に関する報酬
             self.dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
             if self.dis_to_des > 2.0:
-                self.R_g = 10 * (self.dis_to_des_old - self.dis_to_des)
+                self.R_g = 5 * (self.dis_to_des_old - self.dis_to_des)
             else:
                 if (self.dis_to_des_old - self.dis_to_des) > 1e-4:
                     self.R_g = 5 * (self.dis_to_des_old - self.dis_to_des)  # denseな報酬
@@ -213,18 +214,22 @@ class Scenario(BaseScenario):
             
             # 分裂に関する報酬
             self.is_div = self.funcs._chech_div(world)
-            if self.is_div: self.R_div = - 20  # 分裂したとき
+            if not self.is_div: self.R_div = 0
+            else: self.R_div = -20
             
             # リーダーがフォロワから離れすぎないための報酬
             self.min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
             if self.min_dis_to_F > world.followers[0].r_L["r5d"] * 2.0:
-               self.R_L_close = - 0.25 * (self.min_dis_to_F - world.followers[0].r_L["r5d"])
+                if self.min_dis_to_F > self.min_dis_to_F_old[0]:
+                    self.R_L_close = - 0.05 * (self.min_dis_to_F - world.followers[0].r_L["r5d"])
+                else: self.R_L_close = 0
             else: self.R_L_close = 0
+            self.min_dis_to_F_old[0] = self.min_dis_to_F
                
             # リーダーが後ろ側に回り込むための報酬
             L_dis_to_des = LA.norm(self.des - L.state.p_pos)
             if L_dis_to_des < self.dis_to_des:
-                self.R_back = - 0.5 * (self.dis_to_des - L_dis_to_des)
+                self.R_back = - 0.05 * (self.dis_to_des - L_dis_to_des)
             else: self.R_back = 0
             
             # 障害物に近づきすぎないための報酬
@@ -236,38 +241,51 @@ class Scenario(BaseScenario):
                         if self.min_dis_to_Os_old[idx] > min_dis_to_O:
                             R_O = - 20 * (self.min_dis_to_Os_old[idx] - min_dis_to_O)
                         else: R_O = 0
-                        if self.is_close_to_O and min_dis_to_O >= world.followers[0].r_F["r5"]:  # 復帰した場合正の報酬を与える
-                            self.is_close_to_O = False
+                        if self.is_close_to_Os[idx] and min_dis_to_O >= world.followers[0].r_F["r5"]:  # 復帰した場合正の報酬を与える
+                            self.is_close_to_Os[idx] = False
                             R_O = 5
-                    elif (min_dis_to_O < 0.575) and not self.is_close_to_O: 
-                        R_O = -10
-                        self.is_close_to_O = True
+                    elif (min_dis_to_O < 0.575) and not self.is_close_to_Os[idx]: 
+                        R_O = -7.5
+                        self.is_close_to_Os[idx] = True
                     else: R_O = 0
                     self.R_O += R_O
                     self.min_dis_to_Os_old[idx] = min_dis_to_O
             else: self.R_O = 0
             
-            # 衝突に関する報酬
-            is_col = self.funcs._check_col(world)
-            if is_col: self.R_col = - 10
-            else: self.R_col = 0
+            # # 衝突に関する報酬
+            is_col = self.funcs._check_col(L, world)
+            if is_col and not self.is_col_old[0]: self.R_col = -1  # ぶつかった瞬間
+            elif is_col and self.is_col_old[0]: self.R_col = 0  # ぶつかり続けている時(シミュレータの仕様でめり込む)
+            elif not is_col and self.is_col_old[0]: self.R_col = 0  # 離れた時
+            else: self.R_col = 0  # ずっとぶつかっていない時
+            self.is_col_old[0] = is_col
+            # self.R_col = 0
         else:  # 後ろのリーダーの二台目以降
-            # リーダーがフォロワから離れすぎないための報酬
+           # リーダーがフォロワから離れすぎないための報酬
             self.min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
             if self.min_dis_to_F > world.followers[0].r_L["r5d"] * 2.0:
-                self.R_L_close = - 0.25 * (self.min_dis_to_F - world.followers[0].r_L["r5d"])
+                if self.min_dis_to_F > self.min_dis_to_F_old[1]:
+                    self.R_L_close = - 0.05 * (self.min_dis_to_F - world.followers[0].r_L["r5d"])
+                else: self.R_L_close = 0
             else: self.R_L_close = 0
+            self.min_dis_to_F_old[1] = self.min_dis_to_F
             
             # リーダーが後ろ側に回り込むための報酬 
             L_dis_to_des = LA.norm(self.des - L.state.p_pos)  
             if L_dis_to_des < self.dis_to_des:
-                self.R_back = - 0.5 * (self.dis_to_des - L_dis_to_des)
-            else: self.R_back = 0 
+                self.R_back = - 0.05 * (self.dis_to_des - L_dis_to_des)
+            else: self.R_back = 0
+            
+            # 衝突に関する報酬
+            is_col = self.funcs._check_col(L, world)
+            if is_col and not self.is_col_old[1]: self.R_col = -1  # ぶつかった瞬間
+            elif is_col and self.is_col_old[1]: self.R_col = 0  # ぶつかり続けている時(シミュレータの仕様でめり込む)
+            elif not is_col and self.is_col_old[1]: self.R_col = 0  # 離れた時
+            else: self.R_col = 0  # ずっとぶつかっていない時
+            self.is_col_old[1] = is_col 
         
         reward = self.R_F_far + self.R_g + self.R_div + self.R_L_close + self.R_back + self.R_O + self.R_col
-        # to do: 一台ずつ報酬表示できるようにする
-        reward_list = np.round(np.array([self.R_F_far, self.R_g, self.R_div, self.R_L_close, self.R_back, self.R_O, self.R_col])\
-                    / len(world.agents), decimals=2)
+        reward_list = np.array([self.R_F_far, self.R_g, self.R_div, self.R_L_close, self.R_back, self.R_O, self.R_col])
         
         return reward, reward_list
         
@@ -278,19 +296,32 @@ class Scenario(BaseScenario):
             self.COM_to_des = self.des - F_COM
             self.COM_to_des = self.funcs._coord_trans(self.COM_to_des)
             self.COM_to_des[0] /= self.max_dis_to_des  # 距離の正規化
+            # 移動方向のベクトル
+            self.COM_to_des_diff = - F_COM + self.F_COM_old
+            self.COM_to_des_diff = self.funcs._coord_trans(self.COM_to_des_diff)
+            self.COM_to_des_diff[0] /= self.max_moving_dis if self.COM_to_des_diff[0] <= self.max_moving_dis else self.COM_to_des_diff[0]
             
             COM_to_Os = []
-            for O in world.obstacles:
+            for idx, O in enumerate(world.obstacles):
                 COM_to_O = O.state.p_pos - F_COM
                 COM_to_O = self.funcs._coord_trans(COM_to_O)
                 COM_to_O[0] /= self.max_dis_to_O if COM_to_O[0] < self.max_dis_to_O else COM_to_O[0]
                 COM_to_Os.append(COM_to_O)
-            self.COM_to_Os_deques[0].append(COM_to_Os)
+                # 移動方向のベクトル
+                COM_to_O_diff = (O.state.p_pos - self.Os_old[idx]) - (F_COM - self.F_COM_old)
+                COM_to_O_diff = self.funcs._coord_trans(COM_to_O_diff)
+                COM_to_O_diff[0] /= self.max_moving_dis if COM_to_O_diff[0] <= self.max_moving_dis else COM_to_O_diff[0]
+                COM_to_Os.append(COM_to_O_diff)
+            # 1つのdequeを1stepで埋める
+            self.COM_to_Os_deques[0].append(COM_to_Os)  # (num_Os, 4)
             
             # mask用の配列を用意
             self.mask_COM_to_O_list = []
             for idx in range(3 - self.num_Os):
-                self.mask_COM_to_O_list.append(np.full((2, ), -10., np.float32))
+                self.mask_COM_to_O_list.append(np.full((4, ), -10., np.float32))
+            
+            self.F_COM_old = F_COM
+            self.Os_old = [O.state.p_pos for O in world.obstacles]
         
         L_to_Ls = []
         for other in world.agents:
@@ -301,7 +332,7 @@ class Scenario(BaseScenario):
             L_to_Ls.append(L_to_L)
         self.L_to_Ls_deques[i].append(L_to_Ls)
         
-        noise = 0.05 * (2 * np.random.rand() - 1)  # max5cmのノイズを加える
+        noise = 0.05 * (2 * np.random.rand() - 1)  # max5cmのホワイトノイズを加える
         L_to_Fs = []
         for F in world.followers:
             L_to_F = (F.state.p_pos - L.state.p_pos) + noise
@@ -319,7 +350,7 @@ class Scenario(BaseScenario):
         #         des_to_F_dis = LA.norm(F.state.p_pos - self.des)
         #         des_to_Fs.append(des_to_F_dis)
         #     self.sort_idx = np.argsort(des_to_Fs).tolist()
-        # self.L_to_Fs_deques[i].append(np.array(L_to_Fs)[self.sort_idx].tolist())  # ゴールからの距離に応じて並び替え
+        # self.L_to_Fs_deques[i].append(np.array(L_to_Fs)[self.sort_idx].tolist())
         
         # L_to_Os = []
         # for O in world.obstacles: 
@@ -328,14 +359,13 @@ class Scenario(BaseScenario):
         #     L_to_O[0] /= self.max_dis_to_O if L_to_O[0] < self.max_dis_to_O else L_to_O[0]
         #     L_to_Os.append(L_to_O)
         # self.L_to_Os_deques[i].append(L_to_Os)
+        
+        obs = np.concatenate([self.COM_to_des] +[self.COM_to_des_diff] + [L.state.p_vel]
+                            + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1]
+                            + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1]
+                            + self.COM_to_Os_deques[0][1] + self.mask_COM_to_O_list)
 
-        
-        obs = np.concatenate([self.COM_to_des] + [L.state.p_vel]\
-            + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1]\
-            + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1]
-            + self.COM_to_Os_deques[0][1] + self.mask_COM_to_O_list)
-        
-        
+        # print(obs[-12:])
         return obs
     
     def check_done(self, L, world):
@@ -348,7 +378,6 @@ class Scenario(BaseScenario):
         if self.dis_to_des > self.max_dis_to_des: is_exceed = True
         else: is_exceed = False
         # Fまでのmin距離がmaxを超えていないか
-        # self.dis_to_min_F = self.funcs._calc_min_dis_to_F(L, world)
         if self.min_dis_to_F > self.max_dis_to_F: is_exceed_F = True
         else: is_exceed_F = False
         
