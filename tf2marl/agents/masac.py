@@ -4,13 +4,13 @@ import tensorflow as tf
 from gym import Space
 
 from tf2marl.agents.AbstractAgent import AbstractAgent
-from tf2marl.agents.maddpg import MADDPGCriticNetwork, MADDPGPolicyNetwork
+from tf2marl.agents.maddpg import MADDPGCriticNetwork, MADDPGPolicyNetwork, MADDPGPolicyLstmNetwork, MADDPGCriticLstmNetwork
 from tf2marl.common.util import space_n_to_shape_n, clip_by_local_norm
 
 
 class MASACAgent(AbstractAgent):
-    def __init__(self, obs_space_n, act_space_n, agent_index, batch_size, buff_size, lr, num_layer, num_units, gamma,
-                 tau, prioritized_replay=False, alpha=0.6, max_step=None, initial_beta=0.6, prioritized_replay_eps=1e-6,
+    def __init__(self, obs_space_n, act_space_n, agent_index, batch_size, buff_size, lr, num_layer, num_units, num_lstm_units,
+                 gamma, tau, prioritized_replay=False, alpha=0.6, max_step=None, initial_beta=0.6, prioritized_replay_eps=1e-6,
                  entropy_coeff=0.2, use_gauss_policy=False, use_gumbel=True, policy_update_freq=1, _run=None,
                  multi_step=1):
         """
@@ -34,22 +34,31 @@ class MASACAgent(AbstractAgent):
                          prioritized_replay_eps=prioritized_replay_eps)
 
         act_type = type(act_space_n[0])
-        self.critic_1 = MADDPGCriticNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
-        self.critic_1_target = MADDPGCriticNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_1 = MADDPGCriticLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_1_target = MADDPGCriticLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_1 = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_1_target = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
         self.critic_1_target.model.set_weights(self.critic_1.model.get_weights())
-        self.critic_2 = MADDPGCriticNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
-        self.critic_2_target = MADDPGCriticNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+
+        self.critic_2 = MADDPGCriticLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_2_target = MADDPGCriticLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_2 = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_2_target = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
         self.critic_2_target.model.set_weights(self.critic_2.model.get_weights())
 
         # this was proposed to be used in the original SAC paper but later they got rid of it again
-        self.v_network = ValueFunctionNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)  # unused
-        self.v_network_target = ValueFunctionNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)  # unused
-        self.v_network_target.model.set_weights(self.v_network.model.get_weights())  # unused
+        # self.v_network = ValueFunctionNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)  # unused
+        # self.v_network_target = ValueFunctionNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)  # unused
+        # self.v_network_target.model.set_weights(self.v_network.model.get_weights())  # unused
 
-        self.policy = MASACPolicyNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1, entropy_coeff,
+        self.policy = MASACPolicyLstmNetwork(num_layer, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1, entropy_coeff,
                                          agent_index, self.critic_1, use_gauss_policy, use_gumbel, prioritized_replay_eps)
-        self.policy_target = MASACPolicyNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1, entropy_coeff,
+        self.policy_target = MASACPolicyLstmNetwork(num_layer, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1, entropy_coeff,
                                          agent_index, self.critic_1, use_gauss_policy, use_gumbel, prioritized_replay_eps)
+        # self.policy = MASACPolicyNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1, entropy_coeff,
+        #                                  agent_index, self.critic_1, use_gauss_policy, use_gumbel, prioritized_replay_eps)
+        # self.policy_target = MASACPolicyNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1, entropy_coeff,
+        #                                  agent_index, self.critic_1, use_gauss_policy, use_gumbel, prioritized_replay_eps)
         self.policy_target.model.set_weights(self.policy.model.get_weights())
 
 
@@ -85,12 +94,16 @@ class MASACAgent(AbstractAgent):
         Implements the updates of the target networks, which slowly follow the real network.
         """
         def update_target_network(net: tf.keras.Model, target_net: tf.keras.Model):
-            net_weights = np.array(net.get_weights())
-            target_net_weights = np.array(target_net.get_weights())
-            new_weights = tau * net_weights + (1.0 - tau) * target_net_weights
+            net_weights = net.get_weights()
+            target_net_weights = target_net.get_weights()
+            new_weights = []
+            for net_weight, target_net_weight in zip(net_weights, target_net_weights):
+                new_weight = tau * net_weight + (1.0 - tau) * target_net_weight    
+                new_weights.append(new_weight)
+            
             target_net.set_weights(new_weights)
 
-        update_target_network(self.v_network.model, self.v_network_target.model)
+        # update_target_network(self.v_network.model, self.v_network_target.model)
         update_target_network(self.critic_1.model, self.critic_1_target.model)
         update_target_network(self.critic_2.model, self.critic_2_target.model)
         update_target_network(self.policy.model, self.policy_target.model)
@@ -154,13 +167,13 @@ class MASACAgent(AbstractAgent):
             policy_loss = self.policy.train(obs_n, acts_n)
             # Update target networks.
             self.update_target_networks(self.tau)
-            self._run.log_scalar('agent_{}.train.policy_loss'.format(self.agent_index), policy_loss.numpy(), step)
+            # self._run.log_scalar('agent_{}.train.policy_loss'.format(self.agent_index), policy_loss.numpy(), step)
         else:
             policy_loss = None
 
-        self._run.log_scalar('agent_{}.train.q_loss0'.format(self.agent_index), np.mean(td_loss[0]), step)
-        self._run.log_scalar('agent_{}.train.q_loss1'.format(self.agent_index), np.mean(td_loss[1]), step)
-        self._run.log_scalar('agent_{}.train.entropy'.format(self.agent_index), np.mean(entropy), step)
+        # self._run.log_scalar('agent_{}.train.q_loss0'.format(self.agent_index), np.mean(td_loss[0]), step)
+        # self._run.log_scalar('agent_{}.train.q_loss1'.format(self.agent_index), np.mean(td_loss[1]), step)
+        # self._run.log_scalar('agent_{}.train.entropy'.format(self.agent_index), np.mean(entropy), step)
 
         return [td_loss, policy_loss]
 
@@ -170,8 +183,8 @@ class MASACAgent(AbstractAgent):
         self.critic_1_target.model.save_weights(fp + 'critic_target_1.h5',)
         self.critic_2_target.model.save_weights(fp + 'critic_target_2.h5')
 
-        self.v_network.model.save_weights(fp + 'value.h5')
-        self.v_network_target.model.save_weights(fp + 'value_target.h5')
+        # self.v_network.model.save_weights(fp + 'value.h5')
+        # self.v_network_target.model.save_weights(fp + 'value_target.h5')
         self.policy.model.save_weights(fp + 'policy.h5')
         self.policy_target.model.save_weights(fp + 'policy_target.h5')
 
@@ -182,8 +195,8 @@ class MASACAgent(AbstractAgent):
         self.critic_1_target.model.load_weights(fp + 'critic_target_1.h5',)
         self.critic_2_target.model.load_weights(fp + 'critic_target_2.h5')
 
-        self.v_network.model.load_weights(fp + 'value.h5')
-        self.v_network_target.model.load_weights(fp + 'value_target.h5')
+        # self.v_network.model.load_weights(fp + 'value.h5')
+        # self.v_network_target.model.load_weights(fp + 'value_target.h5')
         self.policy.model.load_weights(fp + 'policy.h5')
         self.policy_target.model.load_weights(fp + 'policy_target.h5')
 
@@ -342,3 +355,117 @@ class MASACPolicyNetwork(MADDPGPolicyNetwork):
         local_clipped = clip_by_local_norm(gradients, self.clip_norm)
         self.optimizer.apply_gradients(zip(local_clipped, self.model.trainable_variables))
         return loss
+    
+class MASACPolicyLstmNetwork(MADDPGPolicyLstmNetwork):
+    def __init__(self, num_layers, units_per_layer, num_lstm_units, lr, obs_n_shape, act_shape, act_type,
+                 gumbel_temperature, entropy_coeff, agent_index, q_network, use_gaussian, use_gumbel,
+                 numeric_eps):
+        """
+        Implementation of the policy network, with optional gumbel softmax activation at the final
+        layer. Currently only implemented for discrete spaces with a gumbel policy.
+        """
+        super().__init__(num_layers, units_per_layer, num_lstm_units, lr, obs_n_shape, act_shape, act_type,
+                         gumbel_temperature, q_network, agent_index)
+        self.use_gaussian = not self.use_gumbel
+        self.entropy_coeff = entropy_coeff
+        self.numeric_eps = numeric_eps
+
+        self.optimizer = tf.keras.optimizers.Adam(lr=self.lr)
+        self.input_concat_layer = tf.keras.layers.Concatenate()
+        
+        self.max_num_O = 3
+        # 1つの障害物に対するobservationの数
+        self.Os_obs_num = 4
+        # 最初からmaxの分引いたものをshapeとする
+        self.obs_main_shape = self.obs_n_shape[agent_index] - self.Os_obs_num * self.max_num_O
+        # maxで3(障害物の数)*4(各座標と移動ベクトル)のarrayを想定  
+        self.obs_Os_shape = np.array([self.max_num_O, self.Os_obs_num])
+        
+        ### set up network structure
+        self.obs_input_main = tf.keras.layers.Input(shape=self.obs_main_shape)
+        self.obs_input_Os = tf.keras.layers.Input(shape=self.obs_Os_shape)
+        
+        self.masking_layer = tf.keras.layers.Masking(mask_value=-10., input_shape=self.obs_Os_shape)
+        self.LSTM_layer = tf.keras.layers.LSTM(num_lstm_units)
+        
+        self.hidden_layers = []
+        for idx in range(self.num_layers):
+            layer = tf.keras.layers.Dense(units_per_layer, activation='relu',
+                                          name='ag{}pol_hid{}'.format(agent_index, idx))
+            self.hidden_layers.append(layer)
+            
+
+        if self.use_gumbel:
+            self.output_layer = tf.keras.layers.Dense(self.act_shape, activation='linear',
+                                                      name='ag{}_output'.format(agent_index))
+        else:
+            self.output_layer = tf.keras.layers.Dense(self.act_shape, activation='tanh',
+                                                      name='ag{}_output'.format(agent_index))
+
+        # connect layers
+        x = self.obs_input_Os
+        x = self.masking_layer(x)
+        x = self.LSTM_layer(x)
+        x = self.input_concat_layer([x] + [self.obs_input_main])
+        
+        for idx in range(len(self.hidden_layers)):
+            x = self.hidden_layers[idx](x)
+        
+        x = self.output_layer(x)
+        
+        self.model = tf.keras.Model(inputs=[self.obs_input_main] + [self.obs_input_Os], outputs=[x])
+
+    @tf.function
+    def get_all_action_probs(self, obs):
+        """
+        Return the action probabilities. Only works for discrete action spaces.
+        """
+        logits = self.forward_pass(obs)
+        return tf.math.softmax(logits)
+
+    @classmethod
+    def gaussian_sample(cls, logits):
+        return
+
+    @classmethod
+    def gaussian_prob(cls, logits, actions):
+        return
+
+    @tf.function
+    def action_logprob(self, obs, action):
+        """
+        Returns the log of the probability of the action, given the state.
+        Can be used for vectors.
+        :param state:
+        :param action:
+        :return:
+        """
+        logits = self.forward_pass(obs)
+
+    @tf.function
+    def train(self, obs_n, act_n):
+        with tf.GradientTape() as tape:
+            # x = obs_n[self.agent_index]
+            # for idx in range(self.num_layers):
+            #     x = self.hidden_layers[idx](x)
+            # x = self.output_layer(x)
+            x = x = self.forward_pass(obs_n[self.agent_index])
+            act_n = tf.unstack(act_n)
+            if self.use_gumbel:
+                logits = x  # log probabilities of the gumbel softmax dist are the output of the network
+                act_n[self.agent_index] = self.gumbel_softmax_sample(logits)
+                act_probs = tf.math.softmax(logits)
+                entropy = - tf.math.reduce_sum(act_probs * tf.math.log(act_probs + self.numeric_eps), 1)
+            elif self.use_gaussian:
+                logits = x
+                act_n[self.agent_index] = self.gaussian_sample(logits)
+                entropy = - self.action_logprob(obs_n[self.agent_index], act_n[self.agent_index])
+            q_value = self.q_network._predict_internal(obs_n, act_n)
+
+            loss = -tf.math.reduce_mean(q_value + self.entropy_coeff * entropy)
+
+        gradients = tape.gradient(loss, self.model.trainable_variables)
+        local_clipped = clip_by_local_norm(gradients, self.clip_norm)
+        self.optimizer.apply_gradients(zip(local_clipped, self.model.trainable_variables))
+        return loss
+

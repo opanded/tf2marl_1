@@ -9,8 +9,8 @@ from tf2marl.common.util import space_n_to_shape_n
 
 
 class MATD3Agent(AbstractAgent):
-    def __init__(self, obs_space_n, act_space_n, agent_index, batch_size, buff_size, lr, num_layer, num_units, gamma,
-                 tau, prioritized_replay=False, alpha=0.6, max_step=None, initial_beta=0.6, prioritized_replay_eps=1e-6,
+    def __init__(self, obs_space_n, act_space_n, agent_index, batch_size, buff_size, lr, num_layer, num_units, num_lstm_units,
+                 gamma, tau, prioritized_replay=False, alpha=0.6, max_step=None, initial_beta=0.6, prioritized_replay_eps=1e-6,
                  policy_update_freq=2, target_policy_smoothing_eps=0.0, _run=None):
         """
         An object containing critic, actor and training functions for Multi-Agent TD3.
@@ -23,18 +23,26 @@ class MATD3Agent(AbstractAgent):
                          prioritized_replay_eps=prioritized_replay_eps)
 
         act_type = type(act_space_n[0])
-        self.critic_1 = MADDPGCriticLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
-        self.critic_1_target = MADDPGCriticLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_1 = MADDPGCriticLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_1_target = MADDPGCriticLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_1 = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_1_target = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
         self.critic_1_target.model.set_weights(self.critic_1.model.get_weights())
 
-        self.critic_2 = MADDPGCriticLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
-        self.critic_2_target = MADDPGCriticLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_2 = MADDPGCriticLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_2_target = MADDPGCriticLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_2 = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_2_target = MADDPGCriticNetwork(2, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
         self.critic_2_target.model.set_weights(self.critic_2.model.get_weights())
 
-        self.policy = MADDPGPolicyLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        self.policy = MADDPGPolicyLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
                                           self.critic_1, agent_index)
-        self.policy_target = MADDPGPolicyLstmNetwork(2, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        self.policy_target = MADDPGPolicyLstmNetwork(2, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
                                                  self.critic_1, agent_index)
+        # self.policy = MADDPGPolicyNetwork(2, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        #                                   self.critic_1, agent_index)
+        # self.policy_target = MADDPGPolicyNetwork(2, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        #                                          self.critic_1, agent_index)
         self.policy_target.model.set_weights(self.policy.model.get_weights())
 
         self.batch_size = batch_size
@@ -125,13 +133,13 @@ class MATD3Agent(AbstractAgent):
         if self.update_counter % self.policy_update_freq == 0:  # delayed policy updates
             # Train the policy.
             policy_loss = self.policy.train(obs_n, acts_n)
-            self._run.log_scalar('agent_{}.train.policy_loss'.format(self.agent_index), policy_loss.numpy(), step)
+            # self._run.log_scalar('agent_{}.train.policy_loss'.format(self.agent_index), policy_loss.numpy(), step)
             # Update target networks.
             self.update_target_networks(self.tau)
         else:
             policy_loss = None
-        self._run.log_scalar('agent_{}.train.q_loss0'.format(self.agent_index), np.mean(td_loss[0]), step)
-        self._run.log_scalar('agent_{}.train.q_loss1'.format(self.agent_index), np.mean(td_loss[1]), step)
+        # self._run.log_scalar('agent_{}.train.q_loss0'.format(self.agent_index), np.mean(td_loss[0]), step)
+        # self._run.log_scalar('agent_{}.train.q_loss1'.format(self.agent_index), np.mean(td_loss[1]), step)
 
         return [td_loss, policy_loss]
 

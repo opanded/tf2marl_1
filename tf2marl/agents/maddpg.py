@@ -9,8 +9,8 @@ from tf2marl.common.util import space_n_to_shape_n, clip_by_local_norm
 
 
 class MADDPGAgent(AbstractAgent):
-    def __init__(self, obs_space_n, act_space_n, agent_index, batch_size, buff_size, lr, num_layer, num_units, gamma,
-                 tau, prioritized_replay=False, alpha=0.6, max_step=None, initial_beta=0.6, prioritized_replay_eps=1e-6,
+    def __init__(self, obs_space_n, act_space_n, agent_index, batch_size, buff_size, lr, num_layer, num_units, num_lstm_units,
+                 gamma, tau, prioritized_replay=False, alpha=0.6, max_step=None, initial_beta=0.6, prioritized_replay_eps=1e-6,
                  _run=None):
         """
         An object containing critic, actor and training functions for Multi-Agent DDPG.
@@ -24,14 +24,20 @@ class MADDPGAgent(AbstractAgent):
                          prioritized_replay_eps=prioritized_replay_eps)
 
         act_type = type(act_space_n[0])
-        self.critic = MADDPGCriticLstmNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
-        self.critic_target = MADDPGCriticLstmNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic = MADDPGCriticLstmNetwork(num_layer, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        self.critic_target = MADDPGCriticLstmNetwork(num_layer, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic = MADDPGCriticNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
+        # self.critic_target = MADDPGCriticNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n, act_type, agent_index)
         self.critic_target.model.set_weights(self.critic.model.get_weights())
 
-        self.policy = MADDPGPolicyLstmNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        self.policy = MADDPGPolicyLstmNetwork(num_layer, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
                                           self.critic, agent_index)
-        self.policy_target = MADDPGPolicyLstmNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        self.policy_target = MADDPGPolicyLstmNetwork(num_layer, num_units, num_lstm_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
                                                  self.critic, agent_index)
+        # self.policy = MADDPGPolicyNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        #                                   self.critic, agent_index)
+        # self.policy_target = MADDPGPolicyNetwork(num_layer, num_units, lr, obs_shape_n, act_shape_n[agent_index], act_type, 1,
+        #                                          self.critic, agent_index)
         self.policy_target.model.set_weights(self.policy.model.get_weights())
 
         self.batch_size = batch_size
@@ -107,8 +113,8 @@ class MADDPGAgent(AbstractAgent):
         # Update target networks.
         self.update_target_networks(self.tau)
 
-        self._run.log_scalar('agent_{}.train.policy_loss'.format(self.agent_index), policy_loss.numpy(), step)
-        self._run.log_scalar('agent_{}.train.q_loss0'.format(self.agent_index), np.mean(td_loss), step)
+        # self._run.log_scalar('agent_{}.train.policy_loss'.format(self.agent_index), policy_loss.numpy(), step)
+        # self._run.log_scalar('agent_{}.train.q_loss0'.format(self.agent_index), np.mean(td_loss), step)
 
         return [td_loss, policy_loss]
 
@@ -555,7 +561,7 @@ class MADDPGCriticConvNetwork(object):
 
 # LSTM層を追加したポリシー
 class MADDPGPolicyLstmNetwork(object):
-    def __init__(self, num_layers, units_per_layer, lr, obs_n_shape, act_shape, act_type,
+    def __init__(self, num_layers, units_per_layer, num_lstm_units, lr, obs_n_shape, act_shape, act_type,
                  gumbel_temperature, q_network, agent_index):
         """
         Implementation of the policy network, with optional gumbel softmax activation at the final layer.
@@ -578,15 +584,19 @@ class MADDPGPolicyLstmNetwork(object):
         self.input_concat_layer = tf.keras.layers.Concatenate()
         
         self.max_num_O = 3
-        self.obs_main_shape = self.obs_n_shape[agent_index] - 2 * self.max_num_O  # 最初からmaxの分引いたものをshapeとする
-        self.obs_Os_shape = np.array([self.max_num_O, 2])  # maxで3(障害物の数)*2(各座標)のarrayを想定
+        # 1つの障害物に対するobservationの数
+        self.Os_obs_num = 4
+        # 最初からmaxの分引いたものをshapeとする
+        self.obs_main_shape = self.obs_n_shape[agent_index] - self.Os_obs_num * self.max_num_O
+        # maxで3(障害物の数)*4(各座標と移動ベクトル)のarrayを想定  
+        self.obs_Os_shape = np.array([self.max_num_O, self.Os_obs_num])
         
         ### set up network structure
         self.obs_input_main = tf.keras.layers.Input(shape=self.obs_main_shape)
         self.obs_input_Os = tf.keras.layers.Input(shape=self.obs_Os_shape)
         
         self.masking_layer = tf.keras.layers.Masking(mask_value=-10., input_shape=self.obs_Os_shape)
-        self.LSTM_layer = tf.keras.layers.LSTM(16)
+        self.LSTM_layer = tf.keras.layers.LSTM(num_lstm_units)
         
         self.hidden_layers = []
         for idx in range(self.num_layers):
@@ -630,9 +640,9 @@ class MADDPGPolicyLstmNetwork(object):
         """
         Performs a simple forward pass through the NN.
         """
-        obs_main = obs[:, :-2 * self.max_num_O]  # 障害物以外の情報
-        obs_Os_flat = obs[:, -2 * self.max_num_O:]  # 障害物の情報
-        obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, 2))
+        obs_main = obs[:, :-self.Os_obs_num * self.max_num_O]  # 障害物以外の情報
+        obs_Os_flat = obs[:, -self.Os_obs_num * self.max_num_O:]  # 障害物の情報
+        obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, self.Os_obs_num))
                 
         x = self.input_concat_layer([obs_Os])
         x = self.masking_layer(x)
@@ -673,7 +683,7 @@ class MADDPGPolicyLstmNetwork(object):
     
 
 class MADDPGCriticLstmNetwork(object):
-    def __init__(self, num_hidden_layers, units_per_layer, lr, obs_n_shape, act_shape_n, act_type, agent_index):
+    def __init__(self, num_hidden_layers, units_per_layer, num_lstm_units, lr, obs_n_shape, act_shape_n, act_type, agent_index):
         """
         Implementation of a critic to represent the Q-Values. Basically just a fully-connected
         regression ANN.
@@ -693,8 +703,10 @@ class MADDPGCriticLstmNetwork(object):
         self.obs_input_n_Os = []
         
         self.max_num_O = 3
-        self.obs_main_shape = self.obs_shape_n[agent_index] - 2 * self.max_num_O  # 最初からmaxの分引いたものをshapeとする
-        self.obs_Os_shape = np.array([self.max_num_O, 2])  # maxで3(障害物の数)*2(各座標)のarrayを想定
+        # 1つの障害物に対するobservationの数
+        self.Os_obs_num = 4
+        self.obs_main_shape = self.obs_shape_n[agent_index] - self.Os_obs_num * self.max_num_O  # 最初からmaxの分引いたものをshapeとする
+        self.obs_Os_shape = np.array([self.max_num_O, self.Os_obs_num])  # maxで3(障害物の数)*2(各座標)のarrayを想定
         
         for idx, shape in enumerate(self.obs_shape_n):
             self.obs_input_n_main.append(tf.keras.layers.Input(shape=self.obs_main_shape, name='obs_in' + str(idx)))
@@ -707,7 +719,7 @@ class MADDPGCriticLstmNetwork(object):
         self.input_concat_layer = tf.keras.layers.Concatenate()
         
         self.masking_layer = tf.keras.layers.Masking(mask_value=-10., input_shape=self.obs_Os_shape)
-        self.LSTM_layer = tf.keras.layers.LSTM(16)
+        self.LSTM_layer = tf.keras.layers.LSTM(num_lstm_units)
         
         self.hidden_layers = []
         for idx in range(self.num_layers):
@@ -750,9 +762,9 @@ class MADDPGCriticLstmNetwork(object):
         obs_main_n = []
         obs_Os_n = []
         for idx, obs in enumerate(obs_n):
-            obs_main = obs[:, :-2 * self.max_num_O]  # 障害物以外の情報
-            obs_Os_flat = obs[:, -2 * self.max_num_O:]  # 障害物の情報
-            obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, 2))
+            obs_main = obs[:, :-self.Os_obs_num * self.max_num_O]  # 障害物以外の情報
+            obs_Os_flat = obs[:, -self.Os_obs_num * self.max_num_O:]  # 障害物の情報
+            obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, self.Os_obs_num))
     
             obs_main_n.append(obs_main)
             obs_Os_n.append(obs_Os)
@@ -784,9 +796,9 @@ class MADDPGCriticLstmNetwork(object):
             obs_main_n = []
             obs_Os_n = []
             for idx, obs in enumerate(obs_n):
-                obs_main = obs[:, :-2 * self.max_num_O]  # 障害物以外の情報
-                obs_Os_flat = obs[:, -2 * self.max_num_O:]  # 障害物の情報
-                obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, 2))
+                obs_main = obs[:, :-self.Os_obs_num * self.max_num_O]  # 障害物以外の情報
+                obs_Os_flat = obs[:, -self.Os_obs_num * self.max_num_O:]  # 障害物の情報
+                obs_Os = tf.reshape(obs_Os_flat, (-1, self.max_num_O, self.Os_obs_num))
         
                 obs_main_n.append(obs_main)
                 obs_Os_n.append(obs_Os)
