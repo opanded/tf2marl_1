@@ -1,6 +1,7 @@
 import gym
 from gym import spaces
 import numpy as np
+from numpy import linalg as LA
 
 from tf2marl.multiagent.multi_discrete import MultiDiscrete
 
@@ -44,8 +45,10 @@ class MultiAgentEnv(gym.Env):
         for agent in self.agents:
             total_action_space = []
             # physical action space
-            if self.discrete_action_space:
+            if self.discrete_action_space and not self.discrete_action_input:
                 u_action_space = spaces.Discrete(world.dim_p * 2 + 1)
+            elif self.discrete_action_space and self.discrete_action_input:
+                u_action_space = spaces.Discrete(16)
             else:
                 u_action_space = spaces.Box(low=-agent.u_range, high=+agent.u_range, shape=(world.dim_p,), dtype=np.float32)
             if agent.movable:
@@ -87,7 +90,6 @@ class MultiAgentEnv(gym.Env):
         reward_n = []
         done_n = []
         info_n = {'n': []}
-        is_first = True
         self.agents = self.world.policy_agents
         # set action for each agent
         for i, agent in enumerate(self.agents):
@@ -99,15 +101,12 @@ class MultiAgentEnv(gym.Env):
             obs_n.append(self._get_obs(agent))
             # 報酬のリストを取得
             reward, reward_list = self._get_reward(agent)
-            reward_n.append(reward) 
-            if is_first:
-                reward_list_sum = np.zeros(len(reward_list))
-                is_first = False
-            reward_list_sum += reward_list
+            reward_n.append(reward)  
             done_n.append(self._get_done(agent))
+            # 報酬可視化用
+            self.reward_list_all[i].append(np.round(reward_list, decimals=2))
 
             info_n['n'].append(self._get_info(agent))
-        self.reward_list_all.append(np.round(reward_list_sum, decimals=2))
         # all agents get total reward in cooperative case
         reward = np.sum(reward_n)
         if self.shared_reward:
@@ -122,7 +121,7 @@ class MultiAgentEnv(gym.Env):
         self._reset_render()
         # record observations for each agent
         obs_n = []
-        self.reward_list_all = []
+        self.reward_list_all = [[] for L in self.world.agents]
         self.agents = self.world.policy_agents
         for agent in self.agents:
             obs_n.append(self._get_obs(agent))
@@ -173,11 +172,24 @@ class MultiAgentEnv(gym.Env):
             # physical action
             if self.discrete_action_input:
                 agent.action.u = np.zeros(self.world.dim_p)
+                d = np.argmax(action[0])
                 # process discrete action
-                if action[0] == 1: agent.action.u[0] = -1.0
-                if action[0] == 2: agent.action.u[0] = +1.0
-                if action[0] == 3: agent.action.u[1] = -1.0
-                if action[0] == 4: agent.action.u[1] = +1.0
+                if d == 0: agent.action.u[0] = 0; agent.action.u[1] = 1.0
+                elif d == 1: agent.action.u[0] = 1.0; agent.action.u[1] = 1.0
+                elif d == 2: agent.action.u[0] = 1.0; agent.action.u[1] = 0
+                elif d == 3: agent.action.u[0] = 1.0; agent.action.u[1] = -1.0
+                elif d == 4: agent.action.u[0] = 0; agent.action.u[1] = -1.0
+                elif d == 5: agent.action.u[0] = -1.0; agent.action.u[1] = -1.0
+                elif d == 6: agent.action.u[0] = -1.0; agent.action.u[1] = 0
+                elif d == 7: agent.action.u[0] = -1.0; agent.action.u[1] = 1.0
+                elif d == 8: agent.action.u[0] = 0; agent.action.u[1] = 0.5
+                elif d == 9: agent.action.u[0] = 0.5; agent.action.u[1] = 0.5
+                elif d == 10: agent.action.u[0] = 0.5; agent.action.u[1] = 0
+                elif d == 11: agent.action.u[0] = 0.5; agent.action.u[1] = -0.5
+                elif d == 12: agent.action.u[0] = 0; agent.action.u[1] = -0.5
+                elif d == 13: agent.action.u[0] = -0.5; agent.action.u[1] = -0.5
+                elif d == 14: agent.action.u[0] = -0.5; agent.action.u[1] = 0
+                elif d == 15: agent.action.u[0] = -0.5; agent.action.u[1] = 0.5
             else:
                 if self.force_discrete_action:
                     d = np.argmax(action[0])
