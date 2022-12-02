@@ -26,7 +26,7 @@ class RLLogger(object):
         
         # 学習時と実行時でフォルダを分ける
         if not args["display"]:
-            self.ex_path = os.path.join('learned_results', args["scenario_name"], str(_run._id))
+            self.ex_path = os.path.join(args["save_path"], str(_run._id))
             os.makedirs(self.ex_path, exist_ok=True)
             self.model_path = os.path.join(self.ex_path, 'models')
             os.makedirs(self.model_path, exist_ok=True)
@@ -47,6 +47,7 @@ class RLLogger(object):
         with open(args_file_name, 'wb') as fp:
             pickle.dump(args, fp)
 
+        self.num_episodes = args["num_episodes"]
         self.episode_rewards = [0.0]
         self.agent_rewards = [[0.0] for _ in range(n_agents)]
         self.final_ep_rewards = []  # sum of rewards for training curve
@@ -59,6 +60,7 @@ class RLLogger(object):
         self.t_last_print = time.time()
 
         self.save_rate = save_rate
+        self.save_rate_time = []
         
         # for save mp4
         self.fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
@@ -75,12 +77,13 @@ class RLLogger(object):
         for ag_idx in range(self.n_agents):
             self.agent_rewards[ag_idx].append(0.0)
 
+        # save_rateの10倍の頻度
         if self.episode_count % (self.save_rate / 10) == 0:
             mean_rew = np.mean(self.episode_rewards[-self.save_rate // 10 : -1])
-            self._run.log_scalar('traning.episode_reward', mean_rew, self.train_step)
+            self._run.log_scalar('traning.episode_reward', mean_rew)
             for ag_idx in range(self.n_agents):
                 mean_ag_rew = np.mean(self.agent_rewards[ag_idx][:-self.save_rate//10:-1])
-                self._run.log_scalar('traning.ep_rew_ag{}'.format(ag_idx), mean_ag_rew, self.train_step)
+                self._run.log_scalar('traning.ep_rew_ag{}'.format(ag_idx), mean_ag_rew)
 
 
 
@@ -96,8 +99,8 @@ class RLLogger(object):
         agrew_file_name = os.path.join(self.ex_path, 'agrewards.pkl')
         with open(agrew_file_name, 'wb') as fp:
             pickle.dump(self.final_ep_ag_rewards, fp)
-        print('...Finished total of {} episodes in {} minutes.'.format(self.episode_count,
-                                                                       (time.time() - self.t_start) / 60))
+        print('...Finished total of {} episodes in {}.'.format(self.episode_count,
+                                                                self.convert(time.time() - self.t_start)))
         print(self._run._id)
 
     def convert(self, seconds):
@@ -109,14 +112,19 @@ class RLLogger(object):
         return "%d:%02d:%02d" % (hour, minutes, seconds)
     
     def print_metrics(self):
+        mean_episode_reward = round(np.mean(self.episode_rewards[-self.save_rate:-1]), 3)
+        taken_time = time.time() - self.t_last_print
+        self.save_rate_time.append(taken_time)
+        ave_time = np.mean(self.save_rate_time)
+        time_left = self.convert((self.num_episodes - self.episode_count) / self.save_rate * ave_time)
         if self.n_adversaries == 0:
-            print('steps: {}, episodes: {}, mean episode reward: {}, time: {}'.format(
-                self.train_step, self.episode_count, round(np.mean(self.episode_rewards[-self.save_rate:-1]), 3),
-                self.convert(round(time.time() - self.t_last_print, 3))))
+            print('episodes: {}, mean episode reward: {}, time: {}, time left: {}'.format(
+                self.episode_count, mean_episode_reward, self.convert(taken_time), time_left))
         else:
             print('steps: {}, episodes: {}, mean episode reward: {}, agent episode reward: {}, time: {}'.format(
                 self.train_step, self.episode_count, round(np.mean(self.episode_rewards[-self.save_rate:-1]), 3),
-                [np.mean(rew[-self.save_rate:-1]) for rew in self.agent_rewards], self.convert(round(time.time() - self.t_last_print, 3))))
+                [np.mean(rew[-self.save_rate:-1]) for rew in self.agent_rewards], 
+                self.convert(taken_time)))
         self.t_last_print = time.time()
 
     def save_models(self, agents):
@@ -156,36 +164,38 @@ class RLLogger(object):
         result_rew_dir = os.path.join(result_epi_dir, "reward")
         os.makedirs(result_rew_dir, exist_ok = True)             
         header_list = ["R_F_far", "R_g", "R_div", "R_L_close", "R_back", "R_obs", "R_col"]
-        reward_df = pd.DataFrame(reward_list_all)
-        reward_df.to_csv(f"{str(result_rew_dir)}/reward_list.csv", index=False,\
-                        header= header_list) 
+        reward_df = []
+        for i in range(self.n_agents):
+            reward_df.append(pd.DataFrame(reward_list_all[i]))
+            reward_df[i].to_csv(f"{str(result_rew_dir)}/agent{i}_reward.csv", index=False,\
+                            header= header_list) 
         
-        reward_list = []; reward_diff_list = []
-        tmp_reward = 0
-        for rew in reward_list_all:
-            reward_sum = np.sum(rew)
-            reward_diff = reward_sum - tmp_reward; tmp_reward = reward_sum
-            reward_list.append(reward_sum)
-            reward_diff_list.append(reward_diff)
-        x = np.arange(0, len(reward_list), 1)
-        # plot
+        reward_list = [[] for _ in range(self.n_agents)]; reward_diff_list = []
+        # tmp_reward = 0
         fig = plt.figure(figsize=(9.5, 10))
-        ax1 = fig.add_subplot(3, 1, 1)
-        ax1.set_ylabel("Indivisual reward")
-        # ax1.set_xlim(0, 50)
-        ax1.grid()
-        ax2 = fig.add_subplot(3, 1, 2)
-        ax2.set_ylabel("Whole reward")
-        # ax1.set_xlim(0, 50)
-        ax2.grid()
-        ax3 = fig.add_subplot(3, 1, 3)
-        ax3.set_ylabel("Reward diff")
-        # ax2.set_xlim(0, 50)
-        ax3.grid()
-        for i in range(len(header_list)):
-            ax1.plot(x, reward_df[i], label = header_list[i], lw=1)
-        ax2.plot(x, reward_list, label = "whole_reward", lw=2)
-        ax3.plot(x, reward_diff_list, lw=2)
+        ax_list = [fig.add_subplot(4, 1, 1 * (idx+1)) for idx in range(2 * self.n_agents)]
+        for idx in range(self.n_agents):
+            for rew in reward_list_all[idx]:
+                reward_sum = np.sum(rew)
+                # reward_diff = reward_sum - tmp_reward; tmp_reward = reward_sum
+                reward_list[idx].append(reward_sum)
+                # reward_diff_list.append(reward_diff)
+            x = np.arange(0, len(reward_list[idx]), 1)
+            # plot
+            ax_list[2 * idx].set_ylabel(f"agent{idx}_reward")
+            # ax_list1.set_xlim(0, 50)
+            ax_list[2 * idx].grid()
+            ax_list[2 * idx + 1].set_ylabel(f"agent{idx}_whole_reward")
+            # ax_list1.set_xlim(0, 50)
+            ax_list[2 * idx + 1].grid()
+            if idx == 0:
+                for i in range(len(header_list)):
+                    ax_list[2 * idx].plot(x, reward_df[idx][i], label = header_list[i], lw=1)
+                ax_list[2 * idx + 1].plot(x, reward_list[idx], label = "whole_reward", lw=2)
+            else:
+                for i in range(len(header_list)):
+                    ax_list[2 * idx].plot(x, reward_df[idx][i], lw=1)
+                ax_list[2 * idx + 1].plot(x, reward_list[idx], lw=2)    
         fig.legend()
         fig.savefig(f"{result_epi_dir}/result.png")
         plt.get_current_fig_manager().window.wm_geometry("+1200+0")
