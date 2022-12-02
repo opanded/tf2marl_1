@@ -69,7 +69,7 @@ class Basefuncs():
         # obstacle_ref_coord = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
         O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
         O_pos = []
-        O_width = world.followers[0].r_F["r4"] * 5
+        O_width = world.followers[0].r_F["r4"] * 6
         for i in range(len(world.obstacles)):
             O_next_coord = np.array([O_ref_coord[0] - np.random.rand() + i * O_width, 
                                      O_ref_coord[1] + (2 * np.random.rand() - 1)]) 
@@ -109,8 +109,8 @@ class Basefuncs():
         L_width = 1.5 * world.followers[0].r_L["r5d"]
         # 台数分の初期位置を定義する
         for i in range(num_back_Ls):
-            back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand()\
-                                                    ,back_L_ref_coord[1] - L_width * 1.1]) 
+            back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand() 
+                                        ,back_L_ref_coord[1] - L_width * 1.1])
             back_L_pos.append(back_L_next_coord)
         
         return back_L_pos
@@ -215,19 +215,26 @@ class Basefuncs():
         
         return F_COM
 
-    def _check_col(self, world):
+    def _check_col(self, L, world):
         is_col = False
-        # obj_iはリーダー，フォロワ，障害物のすべてを含む
-        for obj_i in world.entities:
-            for obj_j in world.entities:
-                if obj_i is obj_j: continue
-                delta_pos = obj_j.state.p_pos - obj_i.state.p_pos
-                dist = LA.norm(delta_pos)
-                dist_min = obj_i.size + obj_i.size
-                if dist < dist_min:
-                    is_col = True
-                    break
-            if is_col: break
+        # リーダーとその他の物体との衝突のみ判定する
+        # for obj_i in world.entities:
+        #     for obj_j in world.entities:
+        #         if obj_i is obj_j: continue
+        #         delta_pos = obj_j.state.p_pos - obj_i.state.p_pos
+        #         dist = LA.norm(delta_pos)
+        #         dist_min = obj_i.size + obj_i.size
+        #         if dist < dist_min:
+        #             is_col = True
+        #             break
+        #     if is_col: break
+        for obj_j in world.entities:
+            if L is obj_j: continue
+            dist = LA.norm(obj_j.state.p_pos - L.state.p_pos)
+            dist_min = L.size + obj_j.size
+            if dist < dist_min:
+                is_col = True
+                break
         
         return is_col
 
