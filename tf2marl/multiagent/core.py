@@ -1,5 +1,6 @@
 import numpy as np
 from numpy import linalg as LA
+import random
 
 # physical/external base state of all entites
 class EntityState(object):
@@ -30,7 +31,7 @@ class Entity(object):
         # name 
         self.name = ''
         # properties:
-        self.size = 0.1
+        self.size = 0.075
         # entity can move / be pushed
         self.movable = False
         # entity collides with others
@@ -41,7 +42,7 @@ class Entity(object):
         self.color = None
         # max speed and accel
         self.max_speed = 2.0
-        self.accel = 10
+        self.accel = 7.5
         # state
         self.state = EntityState()
         # mass
@@ -196,8 +197,18 @@ class Follower(Entity):
         
 # properties of obstacles entities
 class Obstacle(Entity):
-     def __init__(self):
+    def __init__(self):
         super(Obstacle, self).__init__()
+        self.have_vel = False
+        self.max_speed = 0.5
+    def set_vel(self):
+        # self.state.p_vel[0] += 1/5 * self.state.p_vel[0] * random.choice([1, -1])
+        # self.state.p_vel[1] += 1/5 * self.state.p_vel[1] * random.choice([1, -1])
+        x_sign = -1. if np.random.rand() < 0.01 else 1.
+        y_sign = -1. if np.random.rand() < 0.01 else 1.
+        self.state.p_vel[0] *= x_sign
+        self.state.p_vel[1] *= y_sign
+        self.state.p_vel = self.state.p_vel.clip(-self.max_speed, self.max_speed)
         
 # multi-agent world
 class World(object):
@@ -265,6 +276,8 @@ class World(object):
         force = self.contact_force * delta_pos / dist * penetration
         force_a = +force if entity_a.movable else None
         force_b = -force if entity_b.movable else None
+        # if force_a is not None and force_b is not None and force_a[0] >= 1e-5: 
+        #     print(force_a)
         return [force_a, force_b]
     
     # gather physical forces acting on entities
@@ -300,7 +313,11 @@ class World(object):
         for i, follower in enumerate(self.followers):
             follower.calc_follower_input(self.agents, self.followers, self.obstacles)
             follower.state.p_pos += follower.state.p_vel * self.dt
-            
+        # obstacleの位置を更新
+        for i, obstacle in enumerate(self.obstacles):
+            if obstacle.have_vel:
+                obstacle.set_vel()  # 毎時刻速度を変える
+                obstacle.state.p_pos += obstacle.state.p_vel * self.dt    
             
     def __update_agent_state(self, agent):
         # set communication state (directly for now)
