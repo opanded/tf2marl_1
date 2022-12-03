@@ -44,12 +44,12 @@ elif input == 2:
 else: print("Invalid value!"); sys.exit()
 
 
-scenario = f'sheperding_st2'
-num_lstm = 16
-load_dir = f"learned_results/sheperding_st2/maddpg_LSTM{num_lstm}/move_Os/success_4_add_learning/models"
-save_dir = f"learned_results/sheperding_st2/maddpg_LSTM{num_lstm}"
+scenario = f'sheperding_st1'
+num_lstm = 64
 policy_idx = 0
 policy_list = ["maddpg", "matd3", "masac"]
+load_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/reward_clipping/base/models"
+save_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/reward_clipping"
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -70,7 +70,7 @@ def train_config():
     scenario_name = scenario # environment name
     num_episodes = 40000            # total episodes
     if scenario == "sheperding_st1":
-        max_episode_len = 500           # timesteps per episodes
+        max_episode_len = 550           # timesteps per episodes
     else: max_episode_len = 650
     
     # Agent Parameters
