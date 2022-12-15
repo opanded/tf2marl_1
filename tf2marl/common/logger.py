@@ -18,11 +18,6 @@ class RLLogger(object):
         args = _run.config
         self.n_agents = n_agents
         self.n_adversaries = n_adversaries
-        # if not os.path.exists(os.path.join(save_dir)):
-        #     os.makedirs(save_dir)
-        # while os.path.exists(os.path.join(save_dir, exp_name)):
-        #     print('WARNING: EXPERIMENT ALREADY EXISTS. APPENDING TO  TRIAL_NAME.')
-        #     exp_name = exp_name + '_i'
         
         # 学習時と実行時でフォルダを分ける
         if not args["display"]:
@@ -35,7 +30,10 @@ class RLLogger(object):
             self.tb_writer = tf.summary.create_file_writer(self.tb_path)
             self.tb_writer.set_as_default()
         else:
-            self.ex_path = os.path.join(args["restore_fp"].replace('/models', ''), "demo", str(_run._id))
+            if args["evaluate"]:
+                self.ex_path = os.path.join(args["restore_fp"].replace('/models', ''), "eval", str(_run._id))
+            else:
+                self.ex_path = os.path.join(args["restore_fp"].replace('/models', ''), "demo", str(_run._id))
             os.makedirs(self.ex_path, exist_ok=True)
             self.tb_path = os.path.join(self.ex_path, 'tb_logs')
             os.makedirs(self.tb_path, exist_ok=True)
@@ -65,8 +63,14 @@ class RLLogger(object):
         # for save mp4
         self.fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
         self.all_frames = []
+        
+        # for evaluation
+        self.num_success = 0
+        self.num_divide = 0
+        self.num_exceed = 0
+        self.num_over = 0
 
-    def record_episode_end(self, agents):
+    def record_episode_end(self, agents, display):
         """
         Records an episode having ended.
         If save rate is reached, saves the models and prints some metrics.
@@ -77,20 +81,21 @@ class RLLogger(object):
         for ag_idx in range(self.n_agents):
             self.agent_rewards[ag_idx].append(0.0)
 
-        # save_rateの10倍の頻度
-        if self.episode_count % (self.save_rate / 10) == 0:
-            mean_rew = np.mean(self.episode_rewards[-self.save_rate // 10 : -1])
-            self._run.log_scalar('traning.episode_reward', mean_rew)
-            for ag_idx in range(self.n_agents):
-                mean_ag_rew = np.mean(self.agent_rewards[ag_idx][:-self.save_rate//10:-1])
-                self._run.log_scalar('traning.ep_rew_ag{}'.format(ag_idx), mean_ag_rew)
+        if not display:
+            # save_rateの10倍の頻度
+            if self.episode_count % (self.save_rate / 10) == 0:
+                mean_rew = np.mean(self.episode_rewards[-self.save_rate // 10 : -1])
+                self._run.log_scalar('traning.episode_reward', mean_rew)
+                for ag_idx in range(self.n_agents):
+                    mean_ag_rew = np.mean(self.agent_rewards[ag_idx][:-self.save_rate//10:-1])
+                    self._run.log_scalar('traning.ep_rew_ag{}'.format(ag_idx), mean_ag_rew)
 
 
 
-        if self.episode_count % self.save_rate == 0:
-            self.print_metrics()
-            self.calculate_means()
-            self.save_models(agents)
+            if self.episode_count % self.save_rate == 0:
+                self.print_metrics()
+                self.calculate_means()
+                self.save_models(agents)
 
     def experiment_end(self):
         rew_file_name = os.path.join(self.ex_path, 'rewards.pkl')
@@ -99,6 +104,19 @@ class RLLogger(object):
         agrew_file_name = os.path.join(self.ex_path, 'agrewards.pkl')
         with open(agrew_file_name, 'wb') as fp:
             pickle.dump(self.final_ep_ag_rewards, fp)
+        
+        # rewardをplotする．
+        result = self.final_ep_rewards
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(111) 
+        x = np.arange(0, len(result) * 1000, 1000)
+        ax.plot(x, result, label= "mean reward")
+        ax.set_ylim(-10, 100)
+        ax.set_xlabel("episode", fontsize=24); ax.set_ylabel("mean reward", fontsize=24)
+        ax.legend()
+        plt.tick_params(labelsize=18)
+        fig.savefig(f"{self.ex_path}/reward_result.png")
+        
         print('...Finished total of {} episodes in {}.'.format(self.episode_count,
                                                                 self.convert(time.time() - self.t_start)))
         print(self._run._id)
@@ -147,7 +165,7 @@ class RLLogger(object):
         result_epi_dir = os.path.join(self.ex_path, "run_" + str(self.episode_count).zfill(2))
         os.makedirs(result_epi_dir, exist_ok = True)             
         # save mp4
-        save = cv2.VideoWriter(str(result_epi_dir) + '/render.mp4', self.fourcc, 30.0, (850, 850))
+        save = cv2.VideoWriter(str(result_epi_dir) + '/render.mp4', self.fourcc, 30.0, (600, 600))
         for img in self.all_frames:
             img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             save.write(img)
@@ -200,7 +218,39 @@ class RLLogger(object):
         fig.savefig(f"{result_epi_dir}/result.png")
         plt.get_current_fig_manager().window.wm_geometry("+1200+0")
         plt.show()
-
+        
+    def save_eval_result(self, info_n, num_eval_episodes, save_movie):          
+        if save_movie:
+            movie_dir = os.path.join(self.ex_path, "movie")
+            os.makedirs(movie_dir, exist_ok = True)   
+            # save mp4
+            save = cv2.VideoWriter(str(movie_dir) + '/render' + str(self.episode_count).zfill(2) + '.mp4', self.fourcc, 30.0, (850, 850))
+            for img in self.all_frames:
+                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                save.write(img)
+            save.release()
+            self.all_frames.clear()
+        if "goal" in info_n:
+            # self._run.log_scalar('done_info', f"{self.episode_count}: goal")
+            self.num_success += 1
+        elif "divide" in info_n:
+            self._run.log_scalar('done_info', f"{self.episode_count}: divide")
+            self.num_divide += 1
+        elif "exceed" in info_n:
+            self._run.log_scalar('done_info', f"{self.episode_count}: exceed")
+            self.num_exceed += 1
+        else:
+            self._run.log_scalar('done_info', f"{self.episode_count}: over")
+            self.num_over += 1
+        if self.episode_count + 1 >= num_eval_episodes:
+            success_rate = 100 * self.num_success / (self.episode_count + 1)
+            divide_rate = 100 * self.num_divide / (self.episode_count + 1)
+            exceed_rate = 100 * self.num_exceed / (self.episode_count + 1)
+            over_rate = 100 * self.num_over / (self.episode_count + 1)
+            self._run.log_scalar('done_info', f"success_rate: {success_rate}%\
+                                                divide_rate: {divide_rate}%\
+                                                exceed_rate: {exceed_rate}%\
+                                                over_rate: {over_rate}%")
 
     @property
     def cur_episode_reward(self):
