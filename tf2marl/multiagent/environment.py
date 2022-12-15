@@ -89,7 +89,7 @@ class MultiAgentEnv(gym.Env):
         obs_n = []
         reward_n = []
         done_n = []
-        info_n = {'n': []}
+        info_n = []
         self.agents = self.world.policy_agents
         # set action for each agent
         for i, agent in enumerate(self.agents):
@@ -101,12 +101,14 @@ class MultiAgentEnv(gym.Env):
             obs_n.append(self._get_obs(agent))
             # 報酬のリストを取得
             reward, reward_list = self._get_reward(agent)
-            reward_n.append(reward)  
-            done_n.append(self._get_done(agent))
+            reward_n.append(reward)
+            done, info = self._get_done(agent)  
+            done_n.append(done)
             # 報酬可視化用
             self.reward_list_all[i].append(np.round(reward_list, decimals=2))
 
-            info_n['n'].append(self._get_info(agent))
+            # info_n['n'].append(self._get_info(agent))
+            info_n.append(info)
         # all agents get total reward in cooperative case
         reward = np.sum(reward_n)
         if self.shared_reward:
@@ -243,7 +245,7 @@ class MultiAgentEnv(gym.Env):
                 # import rendering only if we need it (and don't import for headless machines)
                 #from gym.envs.classic_control import rendering
                 from tf2marl.multiagent import rendering
-                self.viewers[i] = rendering.Viewer(850, 850)
+                self.viewers[i] = rendering.Viewer(600, 600)
 
         # create rendering geometry
         if self.render_geoms is None:
@@ -297,9 +299,10 @@ class MultiAgentEnv(gym.Env):
         results = []
         for i in range(len(self.viewers)):
             # update bounds to center around agent
-            cam_range = 12.5 # 拡大、縮小を決める変数
+            cam_range = 10 # 拡大、縮小を決める変数
             if self.shared_viewer:
-                pos = np.zeros(self.world.dim_p)
+                # pos = np.zeros(self.world.dim_p)
+                pos = self.dest / 2
             else:
                 pos = self.agents[i].state.p_pos
             self.viewers[i].set_bounds(pos[0] - cam_range,pos[0] + cam_range, pos[1]-cam_range, pos[1]+ cam_range)
