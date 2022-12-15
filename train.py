@@ -31,25 +31,32 @@ if list_gpu:
 train_ex = Experiment('sheperding_st1')
 
 ### set global variable ###
-input = int(input("input val[0 -> train, 1 -> add_learning, 2 -> display]:"))
+input = int(input("input val[0 -> train, 1 -> add_learning, 2 -> display, 3 -> evaluate]:"))
 if input == 0: 
     is_display = False
+    is_evaluate = False
     add_learning = False
 elif input == 1: 
     is_display = False
+    is_evaluate = False
     add_learning = True
 elif input == 2: 
     is_display = True
+    is_evaluate = False
+    add_learning = False
+elif input == 3: 
+    is_display = True
+    is_evaluate = True
     add_learning = False
 else: print("Invalid value!"); sys.exit()
 
 
-scenario = f'sheperding_st1'
-num_lstm = 64
+scenario = f'sheperding_st2'
+num_lstm = 16
 policy_idx = 0
 policy_list = ["maddpg", "matd3", "masac"]
-load_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/reward_clipping/base/models"
-save_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/reward_clipping"
+load_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/add_min_O/1/models"
+save_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/add_min_O"
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -60,7 +67,9 @@ def train_config():
     # Logging
     exp_name = 'default'            # name for logging
 
+    save_movie = True
     display = is_display
+    evaluate = is_evaluate
     if is_display or add_learning: restore_fp = load_dir
     else: restore_fp = None
     save_path = save_dir                                
@@ -71,7 +80,8 @@ def train_config():
     num_episodes = 40000            # total episodes
     if scenario == "sheperding_st1":
         max_episode_len = 550           # timesteps per episodes
-    else: max_episode_len = 650
+    else: max_episode_len = 700
+    num_eval_episodes = 1000
     
     # Agent Parameters
     good_policy = policy_list[policy_idx]          # policy of "good" agents in env
@@ -137,9 +147,9 @@ def make_env(scenario_name) -> MultiAgentEnv:
 
 
 @train_ex.main
-def train(_run, exp_name, save_rate, display, restore_fp,
-          hard_max, max_episode_len, num_episodes, batch_size, update_rate,
-          use_target_action):
+def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
+          hard_max, max_episode_len, num_episodes, num_eval_episodes,
+          save_movie, batch_size, update_rate, use_target_action):
     """
     This is the main training function, which includes the setup and training loop.
     It is meant to be called automatically by sacred, but can be used without it as well.
@@ -209,11 +219,13 @@ def train(_run, exp_name, save_rate, display, restore_fp,
             logger.agent_rewards[ag_idx][-1] += rew
 
         if done:
-            if display:
+            if display and not evaluate:
                 logger.save_demo_result(pos_dict, env.reward_list_all)
+            if display and evaluate:
+                logger.save_eval_result(info_n, num_eval_episodes, save_movie)
                 
             obs_n, pos_dict = env.reset()
-            logger.record_episode_end(agents)
+            logger.record_episode_end(agents, display)
 
         logger.train_step += 1
 
@@ -226,10 +238,15 @@ def train(_run, exp_name, save_rate, display, restore_fp,
 
         # for displaying learned policies
         if display:
-            time.sleep(0.025)
-            img = env.render('rgb_array')[0]
-            logger.all_frames.append(img)
-
+            if not evaluate:
+                time.sleep(0.025)
+            if save_movie:
+                img = env.render('rgb_array')[0]
+                logger.all_frames.append(img)
+            if evaluate and len(logger.episode_rewards) > num_eval_episodes:
+                logger.experiment_end()
+                return None
+        # img = env.render('rgb_array')[0]
         # saves logger outputs to a file similar to the way in the original MADDPG implementation
         if len(logger.episode_rewards) > num_episodes:
             logger.experiment_end()
@@ -332,8 +349,11 @@ def main():
     if not is_display: 
         # file_observer = FileStorageObserver(os.path.join('learned_results', scenario))
         file_observer = FileStorageObserver(os.path.join(save_dir))
-    else: 
-        ex_path = os.path.join(load_dir.replace('/models', ''), "demo")
+    else:
+        if is_evaluate: 
+            ex_path = os.path.join(load_dir.replace('/models', ''), "eval")
+        else:
+            ex_path = os.path.join(load_dir.replace('/models', ''), "demo")
         file_observer = FileStorageObserver(ex_path)
     train_ex.observers.append(file_observer)
     train_ex.run_commandline()
