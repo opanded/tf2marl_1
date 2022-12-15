@@ -12,13 +12,16 @@ class Basefuncs():
     def _set_F_pos(self, world):
         F_pos = []
         # 3台ずつ列状に並べる
-        n = 3
+        if len(world.followers) == 4:
+            n = 2
+        else:
+            n = 3
         m = -(-len(world.followers) // n) # m: 列数，演算子を用いて切り上げをしている
         F_ref_coord = np.array([5 * (2 * np.random.rand() - 1), (2 * np.random.rand() - 1)])
         F_width = world.followers[0].r_F["r4"]
         for i in range(m): 
             for j in range(n):
-                F_next_coord = np.array([F_ref_coord[0] + j * F_width, i * F_width]) 
+                F_next_coord = np.array([F_ref_coord[0] + j * F_width, i * F_width])  
                 F_pos.append(F_next_coord)
 
         return F_pos    
@@ -68,6 +71,7 @@ class Basefuncs():
         # フォロワと目的地の中点
         # obstacle_ref_coord = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
         O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
+        O_ref_coord[0] -= 3 * np.random.rand()
         O_pos = []
         O_width = world.followers[0].r_F["r4"] * 6
         for i in range(len(world.obstacles)):
