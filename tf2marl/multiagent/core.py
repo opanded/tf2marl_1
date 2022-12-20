@@ -106,12 +106,14 @@ class Follower(Entity):
     
     def __calc_vec_Flands(self, obstacles):
         # フォロワiに対する障害物の相対ベクトルの取得
-        vec_Flands = []
-        for land in obstacles:
-            vec_F_land = land.state.p_pos - self.state.p_pos
-            vec_Flands.append(vec_F_land)
+        vec_FOs = []
+        for O in obstacles:
+            # 障害物は表面から力を受けるようにする
+            norm = LA.norm(O.state.p_pos - self.state.p_pos)
+            vec_F_O = (O.state.p_pos - self.state.p_pos) / norm * (norm - O.size)
+            vec_FOs.append(vec_F_O)
         
-        return vec_Flands
+        return vec_FOs
     
     def __calc_vec_FL(self, leaders):
         # フォロワiに対するリーダーjの相対ベクトルの取得
@@ -201,11 +203,16 @@ class Obstacle(Entity):
         super(Obstacle, self).__init__()
         self.have_vel = False
         self.max_speed = 0.5
+        self.init_pos = np.array([0, 0])
+        self.max_range = 1
     def set_vel(self):
         # self.state.p_vel[0] += 1/5 * self.state.p_vel[0] * random.choice([1, -1])
         # self.state.p_vel[1] += 1/5 * self.state.p_vel[1] * random.choice([1, -1])
         x_sign = -1. if np.random.rand() < 0.01 else 1.
         y_sign = -1. if np.random.rand() < 0.01 else 1.
+        if LA.norm(self.state.p_pos - self.init_pos) >= self.max_range:
+            x_sign = -1.
+            y_sign = -1.
         self.state.p_vel[0] *= x_sign
         self.state.p_vel[1] *= y_sign
         self.state.p_vel = self.state.p_vel.clip(-self.max_speed, self.max_speed)
@@ -233,6 +240,8 @@ class World(object):
         # contact response parameters
         self.contact_force = 1e+2
         self.contact_margin = 1e-3
+        # record episode num
+        self.num_episodes = 0
 
     # return all entities in the world
     @property
