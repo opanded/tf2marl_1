@@ -231,7 +231,6 @@ class RLLogger(object):
             save.release()
             self.all_frames.clear()
         if "goal" in info_n:
-            # self._run.log_scalar('done_info', f"{self.episode_count}: goal")
             self.num_success += 1
         elif "divide" in info_n:
             self._run.log_scalar('done_info', f"{self.episode_count}: divide")
@@ -247,10 +246,8 @@ class RLLogger(object):
             divide_rate = 100 * self.num_divide / (self.episode_count + 1)
             exceed_rate = 100 * self.num_exceed / (self.episode_count + 1)
             over_rate = 100 * self.num_over / (self.episode_count + 1)
-            self._run.log_scalar('done_info', f"success_rate: {success_rate}%\
-                                                divide_rate: {divide_rate}%\
-                                                exceed_rate: {exceed_rate}%\
-                                                over_rate: {over_rate}%")
+            self._run.log_scalar('done_info', 
+                                 f"success_rate: {success_rate}% divide_rate: {divide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
 
     @property
     def cur_episode_reward(self):
