@@ -28,16 +28,33 @@ class Basefuncs():
 
     def _set_circle_F_pos(self, world, ini_dis_to_des, angle_des):
         fol_width = world.followers[0].r_F["r4"]
-        fol_pos = [ini_dis_to_des * np.array([np.cos(angle_des), np.sin(angle_des)]),
-                    (ini_dis_to_des + fol_width) * np.array([np.cos(angle_des), np.sin(angle_des)])]
         
-        for i in range(2):
-            next_fol_pos1 = np.array([fol_pos[2 * i][0] + fol_width * np.sin(angle_des),
+        if len(world.followers) <= 6:
+            fol_pos = [ini_dis_to_des * np.array([np.cos(angle_des), np.sin(angle_des)]),
+                    (ini_dis_to_des + fol_width) * np.array([np.cos(angle_des), np.sin(angle_des)])]
+            
+            for i in range(2):
+                next_fol_pos1 = np.array([fol_pos[2 * i][0] + fol_width * np.sin(angle_des),
                                         fol_pos[2 * i][1] - fol_width * np.cos(angle_des)])
-            next_fol_pos2 = np.array([fol_pos[2 * i + 1][0] + fol_width * np.sin(angle_des),
-                                        fol_pos[2 * i + 1][1] - fol_width * np.cos(angle_des)])
-            fol_pos.append(next_fol_pos1)
-            fol_pos.append(next_fol_pos2)
+                next_fol_pos2 = np.array([fol_pos[2 * i + 1][0] + fol_width * np.sin(angle_des),
+                                            fol_pos[2 * i + 1][1] - fol_width * np.cos(angle_des)])
+                fol_pos.append(next_fol_pos1)
+                fol_pos.append(next_fol_pos2)
+        else: 
+            fol_pos = [ini_dis_to_des * np.array([np.cos(angle_des), np.sin(angle_des)]),
+                    (ini_dis_to_des + fol_width) * np.array([np.cos(angle_des), np.sin(angle_des)]),
+                    (ini_dis_to_des + 2 * fol_width) * np.array([np.cos(angle_des), np.sin(angle_des)])]
+        
+            for i in range(2):
+                next_fol_pos1 = np.array([fol_pos[3 * i][0] + fol_width * np.sin(angle_des),
+                                            fol_pos[3 * i][1] - fol_width * np.cos(angle_des)])
+                next_fol_pos2 = np.array([fol_pos[3 * i + 1][0] + fol_width * np.sin(angle_des),
+                                            fol_pos[3 * i + 1][1] - fol_width * np.cos(angle_des)])
+                next_fol_pos3 = np.array([fol_pos[3 * i + 2][0] + fol_width * np.sin(angle_des),
+                                            fol_pos[3 * i + 2][1] - fol_width * np.cos(angle_des)])
+                fol_pos.append(next_fol_pos1)
+                fol_pos.append(next_fol_pos2)
+                fol_pos.append(next_fol_pos3)
 
         return fol_pos     
 
@@ -75,7 +92,7 @@ class Basefuncs():
         O_pos = []
         O_width = world.followers[0].r_F["r4"] * 6
         for i in range(len(world.obstacles)):
-            O_next_coord = np.array([O_ref_coord[0] - np.random.rand() + i * O_width, 
+            O_next_coord = np.array([O_ref_coord[0] - 0.6 * np.random.rand() + i * O_width, 
                                      O_ref_coord[1] + (2 * np.random.rand() - 1)]) 
             O_pos.append(O_next_coord)
         
@@ -107,11 +124,14 @@ class Basefuncs():
         return back_L_pos
 
     def _set_back_L_pos_st2(self, world, F_pos, num_back_Ls):
-        back_L_pos = []
+        if len(world.followers) <= 6:
+            L_width = world.followers[0].r_L["r5d"] * 1.5
+        else: 
+            L_width = world.followers[0].r_L["r5d"] * 2
         # 右側後方のフォロワを基準にする
         back_L_ref_coord = np.array([F_pos[0][0], F_pos[0][1]])
-        L_width = 1.5 * world.followers[0].r_L["r5d"]
         # 台数分の初期位置を定義する
+        back_L_pos = []
         for i in range(num_back_Ls):
             back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand() 
                                         ,back_L_ref_coord[1] - L_width * 1.1])
@@ -121,7 +141,10 @@ class Basefuncs():
 
 
     def _set_circle_back_L_pos(self, world, ini_dis_to_des, angle_des):
-        L_width = world.followers[0].r_L["r5d"] * 1.5
+        if len(world.followers) <= 6:
+            L_width = world.followers[0].r_L["r5d"] * 1.5
+        else: 
+            L_width = world.followers[0].r_L["r5d"] * 2
         F_width = world.followers[0].r_F["r4"]
         # 右側後方のフォロワを基準にする
         back_L_pos = [(ini_dis_to_des + F_width + L_width) * np.array([np.cos(angle_des), np.sin(angle_des)])]
@@ -137,15 +160,30 @@ class Basefuncs():
         return back_L_pos
     
     def _rotate_axis(self, F_pos, F_width, angle):
-        new_F_pos = [F_pos[0], np.array([F_pos[0][0] + F_width * np.sin(-angle),
-                              F_pos[0][1] + F_width * np.cos(-angle)])]
-        for i in range(2):
-            next_fol_pos1 = np.array([new_F_pos[2 * i][0] + F_width * np.cos(angle),
-                                        new_F_pos[2 * i][1] + F_width * np.sin(angle)])
-            next_fol_pos2 = np.array([new_F_pos[2 * i + 1][0] + F_width * np.cos(angle),
-                                        new_F_pos[2 * i + 1][1] + F_width * np.sin(angle)])
-            new_F_pos.append(next_fol_pos1)
-            new_F_pos.append(next_fol_pos2)
+        if len(F_pos) <= 6:
+            new_F_pos = [F_pos[0], np.array([F_pos[0][0] + F_width * np.sin(-angle),
+                                F_pos[0][1] + F_width * np.cos(-angle)])]
+            for i in range(2):
+                next_fol_pos1 = np.array([new_F_pos[2 * i][0] + F_width * np.cos(angle),
+                                            new_F_pos[2 * i][1] + F_width * np.sin(angle)])
+                next_fol_pos2 = np.array([new_F_pos[2 * i + 1][0] + F_width * np.cos(angle),
+                                            new_F_pos[2 * i + 1][1] + F_width * np.sin(angle)])
+                new_F_pos.append(next_fol_pos1)
+                new_F_pos.append(next_fol_pos2)
+        else: 
+            new_F_pos = [F_pos[0], 
+                        np.array([F_pos[0][0] + F_width * np.sin(-angle), F_pos[0][1] + F_width * np.cos(-angle)]),
+                        np.array([F_pos[0][0] + 2 * F_width * np.sin(-angle), F_pos[0][1] + 2 * F_width * np.cos(-angle)])]
+            for i in range(2):
+                next_fol_pos1 = np.array([new_F_pos[3 * i][0] + F_width * np.cos(angle),
+                                            new_F_pos[3 * i][1] + F_width * np.sin(angle)])
+                next_fol_pos2 = np.array([new_F_pos[3 * i + 1][0] + F_width * np.cos(angle),
+                                            new_F_pos[3 * i + 1][1] + F_width * np.sin(angle)])
+                next_fol_pos3 = np.array([new_F_pos[3 * i + 2][0] +  F_width * np.cos(angle),
+                                            new_F_pos[3 * i + 2][1] + F_width * np.sin(angle)])
+                new_F_pos.append(next_fol_pos1)
+                new_F_pos.append(next_fol_pos2)
+                new_F_pos.append(next_fol_pos3)
         
         return new_F_pos
 
