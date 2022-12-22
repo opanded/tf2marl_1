@@ -36,27 +36,31 @@ if input == 0:
     is_display = False
     is_evaluate = False
     add_learning = False
+    is_save_movie = False
 elif input == 1: 
     is_display = False
     is_evaluate = False
     add_learning = True
+    is_save_movie = False
 elif input == 2: 
     is_display = True
     is_evaluate = False
     add_learning = False
+    is_save_movie = True
 elif input == 3: 
     is_display = True
     is_evaluate = True
     add_learning = False
+    is_save_movie = False
 else: print("Invalid value!"); sys.exit()
 
 
-scenario = f'sheperding_st2'
+scenario = f'sheperding_st1'
 num_lstm = 16
 policy_idx = 0
 policy_list = ["maddpg", "matd3", "masac"]
-load_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/add_min_O/1/models"
-save_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/add_min_O"
+load_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/any_Fs/circle_1/models"
+save_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/any_Fs"
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -67,7 +71,7 @@ def train_config():
     # Logging
     exp_name = 'default'            # name for logging
 
-    save_movie = True
+    save_movie = is_save_movie
     display = is_display
     evaluate = is_evaluate
     if is_display or add_learning: restore_fp = load_dir
@@ -247,6 +251,7 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
                 logger.experiment_end()
                 return None
         # img = env.render('rgb_array')[0]
+        # time.sleep(0.05)
         # saves logger outputs to a file similar to the way in the original MADDPG implementation
         if len(logger.episode_rewards) > num_episodes:
             logger.experiment_end()
