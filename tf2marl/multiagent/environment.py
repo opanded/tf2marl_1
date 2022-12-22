@@ -127,6 +127,8 @@ class MultiAgentEnv(gym.Env):
         self.agents = self.world.policy_agents
         for agent in self.agents:
             obs_n.append(self._get_obs(agent))
+            
+        self.world.num_episodes += 1
         return obs_n, pos_dict
 
     # get info used for benchmarking
@@ -248,53 +250,63 @@ class MultiAgentEnv(gym.Env):
                 self.viewers[i] = rendering.Viewer(600, 600)
 
         # create rendering geometry
-        if self.render_geoms is None:
-            # import rendering only if we need it (and don't import for headless machines)
-            #from gym.envs.classic_control import rendering
-            from tf2marl.multiagent import rendering
-            self.render_geoms = []
-            self.render_geoms_xform = []
-            for entity in self.world.entities:
-                geom = rendering.make_circle(entity.size)
-                xform = rendering.Transform()
-                if 'leader' in entity.name:
-                    geom.set_color(*entity.color, alpha=0.5)
-                else:
-                    geom.set_color(*entity.color)
-                geom.add_attr(xform)
-                self.render_geoms.append(geom)
-                self.render_geoms_xform.append(xform)
-            
-            # 目的地を追加
-            geom_des = rendering.make_circle(self.rho_g)
-            geom_des.set_color(*np.array([0.5, 0.5, 0.5]), alpha=0.5) # alphaは透明度を表す
-            xform_des = rendering.Transform()
-            geom_des.add_attr(xform_des)
-            self.render_geoms.append(geom_des)
-            self.render_geoms_xform.append(xform_des)
-            # 重心を追加
-            size = 0.04
-            points = [(size, 0), (0, 1.5 * size), (-size, 0), (0, -1.5 * size)]
-            geom_COM = rendering.make_polygon(points)
-            geom_COM.set_color(*np.array([0, 0.5, 0]), alpha=1) # alphaは透明度を表す
-            xform_COM = rendering.Transform()
-            geom_COM.add_attr(xform_COM)
-            self.render_geoms.append(geom_COM)
-            self.render_geoms_xform.append(xform_COM)
-
-            # # 障害物周りのポテンシャルを追加
-            # geom_obs = rendering.make_circle(1.2)  # フォロワの値変えたら修正する
-            # xform_obs = rendering.Transform()
-            # geom_obs.set_color(*np.array([0, 0.5, 0]), alpha=0.25)
-            # geom_obs.add_attr(xform_obs)
-            # self.render_geoms.append(geom_obs)
-            # self.render_geoms_xform.append(xform_obs)
-            
-            # add geoms to viewer
-            for viewer in self.viewers:
-                viewer.geoms = []
-                for geom in self.render_geoms:
-                    viewer.add_geom(geom)
+        # if self.render_geoms is None:
+        # import rendering only if we need it (and don't import for headless machines)
+        from tf2marl.multiagent import rendering
+        self.render_geoms = []
+        self.render_geoms_xform = []
+        
+        for entity in self.world.entities:
+            geom = rendering.make_circle(entity.size)
+            xform = rendering.Transform()
+            if 'leader' in entity.name:
+                geom.set_color(*entity.color, alpha=0.5)
+            else:
+                geom.set_color(*entity.color)
+            geom.add_attr(xform)
+            self.render_geoms.append(geom)
+            self.render_geoms_xform.append(xform)
+        
+        # 目的地を追加
+        geom_des = rendering.make_circle(self.rho_g)
+        geom_des.set_color(*np.array([0.5, 0.5, 0.5]), alpha=0.5) # alphaは透明度を表す
+        xform_des = rendering.Transform()
+        geom_des.add_attr(xform_des)
+        self.render_geoms.append(geom_des)
+        self.render_geoms_xform.append(xform_des)
+        # 重心を追加
+        size = 0.04
+        points = [(size, 0), (0, 1.5 * size), (-size, 0), (0, -1.5 * size)]
+        geom_COM = rendering.make_polygon(points)
+        geom_COM.set_color(*np.array([0, 0.5, 0]), alpha=1) # alphaは透明度を表す
+        xform_COM = rendering.Transform()
+        geom_COM.add_attr(xform_COM)
+        self.render_geoms.append(geom_COM)
+        self.render_geoms_xform.append(xform_COM)
+        # followerの外接矩形を追加
+        if len(self.world.box) != 0: 
+            center = np.mean(self.world.box, axis = 0)
+            geom_rect = rendering.make_polygon(self.world.box - center, filled=False)
+            xform_rect = rendering.Transform()
+            geom_rect.set_color(*np.array([0, 0, 1]))
+            geom_rect.add_attr(xform_rect)
+            self.render_geoms.append(geom_rect)
+            self.render_geoms_xform.append(xform_rect)
+        # 障害物周りのmax_rangeを追加
+        for O in self.world.obstacles:
+            if O.have_vel:
+                geom_obs = rendering.make_circle(O.max_range)
+                xform_obs = rendering.Transform()
+                geom_obs.set_color(*np.array([0, 0.5, 0]), alpha=0.1)
+                geom_obs.add_attr(xform_obs)
+                self.render_geoms.append(geom_obs)
+                self.render_geoms_xform.append(xform_obs)
+                
+        # add geoms to viewer
+        for viewer in self.viewers:
+            viewer.geoms = []
+            for geom in self.render_geoms:
+                viewer.add_geom(geom)
 
         results = []
         for i in range(len(self.viewers)):
@@ -314,9 +326,14 @@ class MultiAgentEnv(gym.Env):
             # 重心の更新
             follower_COM = self.__calc_F_COM(self.world)
             self.render_geoms_xform[len(self.world.entities) + 1].set_translation(*follower_COM)
-            # ポテンシャルの更新
-            # pos = self.world.obstacles[0].state.p_pos
-            # self.render_geoms_xform[len(self.world.entities) + 2].set_translation(*pos)
+            # 外接矩形の更新
+            if len(self.world.box) != 0:
+                self.render_geoms_xform[len(self.world.entities) + 2].set_translation(*center)
+            # 障害物周りのmax_rangeの更新
+            for O in self.world.obstacles:
+                if O.have_vel:
+                    pos = O.init_pos
+                    self.render_geoms_xform[-1].set_translation(*pos)
             # render to display or array
             results.append(self.viewers[i].render(return_rgb_array = mode =='rgb_array'))
         return results
