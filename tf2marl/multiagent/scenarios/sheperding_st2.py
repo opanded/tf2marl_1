@@ -10,6 +10,7 @@ from numpy import linalg as LA
 from collections import deque
 import copy
 import random
+import cv2
 
 class Scenario(BaseScenario):   
     def __init__(self):
@@ -18,7 +19,7 @@ class Scenario(BaseScenario):
         self.num_back_Ls = 2
         self.num_Ls = self.num_back_Ls + self.num_front_Ls
         self.num_Fs = 6
-        self.num_Os = random.choice([1, 2])
+        self.num_Os = random.choice([1, 2, 3])
         self.funcs = Basefuncs()
     
     def make_world(self):
@@ -41,10 +42,10 @@ class Scenario(BaseScenario):
             F.collide = True
             F.movable = False
             F.color = np.array([0, 0, 1])
-        self.max_dis_to_des = 15.
-        self.max_dis_to_L = 7.5
-        self.max_dis_to_F = 7.5
+        self.max_dis_to_des = 12.5
+        self.max_dis_to_agent = 7.5
         self.max_dis_to_O = 5. 
+        self.arc_len_max = world.followers[0].r_F["r4"] * (self.num_Fs - 1) * 2
         # リーダー入れ替え用の配列を用意
         self.rand_idx = [i for i in range(self.num_Ls)]
         
@@ -54,7 +55,7 @@ class Scenario(BaseScenario):
     
     def reset_world(self, world):
         # 障害物の数をエピソード毎に変化させる
-        self.num_Os = random.choice([1, 2, 3])
+        self.num_Os = random.choice([2, 3])
         # add obstacles
         world.obstacles = [Obstacle() for i in range(self.num_Os)]
         
@@ -121,10 +122,18 @@ class Scenario(BaseScenario):
         for i, F in enumerate(world.followers):
             F.state.p_pos = self.F_pos[i]
             F.state.p_vel = np.zeros(world.dim_p)
-        idx = random.choice([0, 1, 2])
+        
+        # 最初の２万ステップは障害物を動かさない
+        if world.num_episodes <= 20000:
+            idx = 3
+        else: idx = random.choice([0, 1, 2])
+        # idx = random.choice([0, 1, 2])
+        
         for i, O in enumerate(world.obstacles):
             O.state.p_pos = self.O_pos[i]
-            if i == idx: O.have_vel = True  # ここをfalseにすると全ての障害物が静止
+            if i == idx: 
+                O.have_vel = True  # ここをfalseにすると全ての障害物が静止
+                O.init_pos = copy.deepcopy(self.O_pos[i])
             if O.have_vel:
                 O.state.p_vel = np.array([0.2, 0.2])
             O.name = 'obstacle_%d' % i
@@ -256,13 +265,12 @@ class Scenario(BaseScenario):
             else: self.R_O = 0
             
             # 衝突に関する報酬
-            # is_col = self.funcs._check_col(L, world)
-            # if is_col and not self.is_col_old[0]: self.R_col = -1  # ぶつかった瞬間
-            # elif is_col and self.is_col_old[0]: self.R_col = 0  # ぶつかり続けている時(シミュレータの仕様でめり込む)
-            # elif not is_col and self.is_col_old[0]: self.R_col = 0  # 離れた時
-            # else: self.R_col = 0  # ずっとぶつかっていない時
-            # self.is_col_old[0] = is_col
-            self.R_col = 0
+            is_col = self.funcs._check_col(L, world)
+            if is_col and not self.is_col_old[0]: self.R_col = -0.75  # ぶつかった瞬間
+            elif is_col and self.is_col_old[0]: self.R_col = 0  # ぶつかり続けている時(シミュレータの仕様でめり込む)
+            elif not is_col and self.is_col_old[0]: self.R_col = 0  # 離れた時
+            else: self.R_col = 0  # ずっとぶつかっていない時
+            self.is_col_old[0] = is_col
         else:  # 後ろのリーダーの二台目以降
             # リーダーがフォロワから離れすぎないための報酬更新
             self.min_dis_to_F = self.funcs._calc_min_dis_to_F(L, world)
@@ -281,110 +289,162 @@ class Scenario(BaseScenario):
             else: self.R_back = 0
             self.R_back = np.clip(self.R_back, -0.05, 0.05)
             
-            # # 衝突に関する報酬
-            # is_col = self.funcs._check_col(L, world)
-            # if is_col and not self.is_col_old[1]: self.R_col = -1  # ぶつかった瞬間
-            # elif is_col and self.is_col_old[1]: self.R_col = 0  # ぶつかり続けている時(シミュレータの仕様でめり込む)
-            # elif not is_col and self.is_col_old[1]: self.R_col = 0  # 離れた時
-            # else: self.R_col = 0  # ずっとぶつかっていない時
-            # self.is_col_old[1] = is_col
+            # 衝突に関する報酬
+            is_col = self.funcs._check_col(L, world)
+            if is_col and not self.is_col_old[1]: self.R_col = -0.75  # ぶつかった瞬間
+            elif is_col and self.is_col_old[1]: self.R_col = 0  # ぶつかり続けている時(シミュレータの仕様でめり込む)
+            elif not is_col and self.is_col_old[1]: self.R_col = 0  # 離れた時
+            else: self.R_col = 0  # ずっとぶつかっていない時
+            self.is_col_old[1] = is_col
         
+        # 早く到達させるために各ステップ毎に-の報酬を入れる
         reward = self.R_F_far + self.R_g + self.R_div + self.R_L_close + self.R_back + self.R_O + self.R_col
         reward_list = np.array([self.R_F_far, self.R_g, self.R_div, self.R_L_close, self.R_back, self.R_O, self.R_col])
         
         return reward, reward_list
         
     def observation(self, L, world):
-        i = int(L.name.replace('leader_', ''))
-        if i < self.num_front_Ls + 1:  # 1台目のリーダー
-            F_COM = self.funcs._calc_F_COM(world)
-            self.COM_to_des = self.des - F_COM
+        L_idx = int(L.name.replace('leader_', ''))  # リーダーのID
+        if L_idx < self.num_front_Ls + 1:  # 1台目のリーダー
+            self.F_COM = self.funcs._calc_F_COM(world)
+            self.COM_to_des = self.des - self.F_COM
             self.COM_to_des = self.funcs._coord_trans(self.COM_to_des)
             self.COM_to_des[0] /= self.max_dis_to_des  # 距離の正規化
-            # 移動方向のベクトル
-            self.COM_to_des_diff = - F_COM + self.F_COM_old
+            # 相対速度ベクトル
+            self.COM_to_des_diff = - self.F_COM + self.F_COM_old
             self.COM_to_des_diff = self.funcs._coord_trans(self.COM_to_des_diff)
             self.COM_to_des_diff[0] /= self.max_moving_dis if self.COM_to_des_diff[0] <= self.max_moving_dis else self.COM_to_des_diff[0]
-            
-            COM_to_Os = []
+                        
+            COM_to_Os = []; COM_to_Os_diff = []
             for idx, O in enumerate(world.obstacles):
-                COM_to_O = O.state.p_pos - F_COM
+                COM_to_O = O.state.p_pos - self.F_COM
                 COM_to_O = self.funcs._coord_trans(COM_to_O)
                 COM_to_O[0] /= self.max_dis_to_O if COM_to_O[0] < self.max_dis_to_O else COM_to_O[0]
                 COM_to_Os.append(COM_to_O)
-                # 移動方向のベクトル
-                COM_to_O_diff = (O.state.p_pos - self.Os_old[idx]) - (F_COM - self.F_COM_old)
+                # 相対速度ベクトル
+                COM_to_O_diff = (O.state.p_pos - self.Os_old[idx]) - (self.F_COM - self.F_COM_old)
                 COM_to_O_diff = self.funcs._coord_trans(COM_to_O_diff)
                 COM_to_O_diff[0] /= self.max_moving_dis if COM_to_O_diff[0] <= self.max_moving_dis else COM_to_O_diff[0]
-                COM_to_Os.append(COM_to_O_diff)
-            # 1つのdequeを1stepで埋める
-            self.COM_to_Os_deques[0].append(COM_to_Os)  # (num_Os, 4)
+                COM_to_Os_diff.append(COM_to_O_diff)
+            # 障害物を遠い順に並び替える
+            COM_to_Os = np.array(COM_to_Os); COM_to_Os_diff = np.array(COM_to_Os_diff)
+            sort_idx = np.argsort(COM_to_Os[:, 0])[::-1]
+            COM_to_Os = COM_to_Os[sort_idx]
+            COM_to_Os_diff = COM_to_Os_diff[sort_idx]
+            
+            COM_to_Os_info = []
+            for O_vec, O_diff in zip(COM_to_Os, COM_to_Os_diff):
+                COM_to_Os_info.append(O_vec)
+                COM_to_Os_info.append(O_diff)
+            self.COM_to_Os_deques[0].append(COM_to_Os_info)
             
             # mask用の配列を用意
             self.mask_COM_to_O_list = []
             for idx in range(3 - self.num_Os):
                 self.mask_COM_to_O_list.append(np.full((4, ), -10., np.float32))
+            # old変数の更新
+            self.F_COM_old = self.F_COM
+            self.Os_old = [copy.deepcopy(O.state.p_pos) for O in world.obstacles]
             
-            self.F_COM_old = F_COM
-            self.Os_old = [O.state.p_pos for O in world.obstacles]
-        
+            # 群れの外接多角形の長さを取得
+            self.F_pts = [F.state.p_pos for F in world.followers]
+            hull = cv2.convexHull(np.array(self.F_pts, dtype=np.float32))
+            self.hull_len = cv2.arcLength(hull, True)
+            self.hull_len /= self.arc_len_max if self.hull_len <= self.arc_len_max else self.hull_len
+            # 外接矩形の4点を取得
+            rect = cv2.minAreaRect(hull)
+            world.box = cv2.boxPoints(rect)  # renderingに表示させるためにworldの変数とする
+            
         L_to_Ls = []
         for other in world.agents:
             if L is other: continue 
             L_to_L = other.state.p_pos - L.state.p_pos
             L_to_L = self.funcs._coord_trans(L_to_L)
-            L_to_L[0] /= self.max_dis_to_L  if L_to_L[0] < self.max_dis_to_L else L_to_L[0]  # 正規化
+            L_to_L[0] /= self.max_dis_to_agent  if L_to_L[0] < self.max_dis_to_agent else L_to_L[0]
             L_to_Ls.append(L_to_L)
-        self.L_to_Ls_deques[i].append(L_to_Ls)
+        self.L_to_Ls_deques[L_idx].append(L_to_Ls)
         
-        noise = 0.05 * (2 * np.random.rand() - 1)  # max5cmのホワイトノイズを加える
-        L_to_Fs = []
-        for F in world.followers:
-            L_to_F = (F.state.p_pos - L.state.p_pos) + noise
-            L_to_F = self.funcs._coord_trans(L_to_F)
-            L_to_F[0] /= self.max_dis_to_F  if L_to_F[0] < self.max_dis_to_F else L_to_F[0]  # 正規化
-            L_to_Fs.append(L_to_F)
-        # to do: フォロワの並び替えの方法もう少し考える．    
-        # self.L_to_Fs_deques[i].append(L_to_Fs)
-        self.L_to_Fs_deques[i].append(np.sort(L_to_Fs, axis=0).tolist())
+        # # 全てのフォロワの座標を入力とする
+        # L_to_Fs = []
+        # for F in world.followers:
+        #     noise = 0.1 * (2 * np.random.rand() - 1)  # max10cmのホワイトノイズ
+        #     L_to_F = F.state.p_pos - L.state.p_pos + noise
+        #     L_to_F = self.funcs._coord_trans(L_to_F)
+        #     L_to_F[0] /= self.max_dis_to_agent  if L_to_F[0] < self.max_dis_to_agent else L_to_F[0]  # 正規化
+        #     L_to_Fs.append(L_to_F)
+        # L_to_Fs = np.array(L_to_Fs)
+        # L_to_Fs = L_to_Fs[np.argsort(L_to_Fs[:, 0])]
+        # self.L_to_Fs_deques[L_idx].append(L_to_Fs.tolist())
         
-        # # Fの順番並べ替え用の配列を用意
-        # if i < self.num_front_Ls + 1:  # 1台目のリーダー
-        #     des_to_Fs = []
-        #     for F in world.followers:
-        #         des_to_F_dis = LA.norm(F.state.p_pos - self.des)
-        #         des_to_Fs.append(des_to_F_dis)
-        #     self.sort_idx = np.argsort(des_to_Fs).tolist()
-        # self.L_to_Fs_deques[i].append(np.array(L_to_Fs)[self.sort_idx].tolist())
+        # # 外接円の4点を入力とし，近い順に並び替える
+        # L_to_circ_vecs = []
+        # L_to_COM = self.F_COM - L.state.p_pos
+        # COM_to_far_F = np.array([0, 0])
+        # for F in world.followers:
+        #     COM_to_F = F.state.p_pos - self.F_COM
+        #     if LA.norm(COM_to_F) >= LA.norm(COM_to_far_F):
+        #         COM_to_far_F =  COM_to_F
+        # for i in range(4):
+        #     R = np.array([[np.cos(i * 90), -np.sin(i * 90)],
+        #                   [np.sin(i * 90),  np.cos(i * 90)]])
+        #     COM_to_circ_vec = np.dot(R, COM_to_far_F)
+        #     L_to_circ_vec = L_to_COM + COM_to_circ_vec
+        #     L_to_circ_vec = self.funcs._coord_trans(L_to_circ_vec)
+        #     L_to_circ_vec[0] /= self.max_dis_to_agent if L_to_circ_vec[0] < self.max_dis_to_agent else L_to_circ_vec[0]
+        #     L_to_circ_vecs.append(L_to_circ_vec)
+        # L_to_circ_vecs = np.array(L_to_circ_vecs)
+        # L_to_circ_vecs = L_to_circ_vecs[np.argsort(L_to_circ_vecs[:, 0])]
+        # self.L_to_Fs_deques[L_idx].append(L_to_circ_vecs.tolist())
         
-        # L_to_Os = []
-        # for O in world.obstacles: 
-        #     L_to_O = O.state.p_pos - L.state.p_pos
-        #     L_to_O = self.funcs._coord_trans(L_to_O)
-        #     L_to_O[0] /= self.max_dis_to_O if L_to_O[0] < self.max_dis_to_O else L_to_O[0]
-        #     L_to_Os.append(L_to_O)
-        # self.L_to_Os_deques[i].append(L_to_Os)
+        # 外接矩形の4点を入力とし，近い順に並び替える
+        L_to_rec_vecs = []
+        for point in world.box:
+            noise = 0.1 * (2 * np.random.rand() - 1)  # max10cmのホワイトノイズ
+            L_to_rec_vec = point - L.state.p_pos + noise
+            L_to_rec_vec = self.funcs._coord_trans(L_to_rec_vec)
+            L_to_rec_vec[0] /= self.max_dis_to_agent if L_to_rec_vec[0] < self.max_dis_to_agent else L_to_rec_vec[0]
+            L_to_rec_vecs.append(L_to_rec_vec)
+        L_to_rec_vecs = np.array(L_to_rec_vecs)
+        L_to_rec_vecs = L_to_rec_vecs[np.argsort(L_to_rec_vecs[:, 0])]
+        self.L_to_Fs_deques[L_idx].append(L_to_rec_vecs.tolist())
         
-        obs = np.concatenate([self.COM_to_des] +[self.COM_to_des_diff] + [L.state.p_vel]
-                            + self.L_to_Fs_deques[i][0] + self.L_to_Fs_deques[i][1]
-                            + self.L_to_Ls_deques[i][0] + self.L_to_Ls_deques[i][1]
+        # 1番近い物体までの相対ベクトル
+        L_to_min_obj = np.array([100, 100])
+        for obj in world.entities:
+            if L is obj: continue
+            L_to_obj = obj.state.p_pos - L.state.p_pos
+            L_to_obj = self.funcs._coord_trans(L_to_obj)
+            if L_to_obj[0] < L_to_min_obj[0]:
+                L_to_min_obj = L_to_obj
+        L_to_min_obj[0] /= self.max_dis_to_agent if L_to_obj[0] < self.max_dis_to_agent else L_to_min_obj[0]
+        
+        
+        # obs = np.concatenate([self.COM_to_des] + [self.COM_to_des_diff]
+        #                     + [L.state.p_vel] + [[self.hull_len]]
+        #                     + self.L_to_Fs_deques[L_idx][1] + self.L_to_Ls_deques[L_idx][1] + [L_to_min_obj]
+        #                     + self.COM_to_Os_deques[0][1] + self.mask_COM_to_O_list)
+        
+        obs = np.concatenate([self.COM_to_des] 
+                            + [L.state.p_vel] + [[self.hull_len]]
+                            + self.L_to_Fs_deques[L_idx][1] + self.L_to_Ls_deques[L_idx][1] + [L_to_min_obj]
                             + self.COM_to_Os_deques[0][1] + self.mask_COM_to_O_list)
 
-        # print(obs[-12:])
         return obs
     
     def check_done(self, L, world):
-        # goalしたか否か
-        # dis_to_des = self.funcs._calc_dis_to_des(world, self.des)
-        # is_goal = self.funcs._check_goal(dis_to_des, self.rho_g)
-        # 分裂したか否か
-        # is_div = self.funcs._chech_div(world)
         # desまでの距離がmaxを超えていないか
-        if self.dis_to_des > self.max_dis_to_des: is_exceed = True
+        if self.dis_to_des > self.max_dis_to_des: 
+            is_exceed = True
         else: is_exceed = False
         # Fまでのmin距離がmaxを超えていないか
-        if self.min_dis_to_F > self.max_dis_to_F: is_exceed_F = True
+        if self.min_dis_to_F > self.max_dis_to_agent: is_exceed_F = True
         else: is_exceed_F = False
         
-        if self.is_goal or self.is_div or is_exceed or is_exceed_F: return True
-        else: return False
+        if self.is_goal:
+            return True, "goal"
+        elif self.is_div:
+            return True, "divide"
+        elif is_exceed or is_exceed_F: 
+            return True, "exceed"
+        else: 
+            return False, "continue"
