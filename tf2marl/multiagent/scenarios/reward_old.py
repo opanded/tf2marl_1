@@ -98,3 +98,25 @@ if int(L.name.replace('leader_', '')) < self.num_front_Ls + 1:  # 1台目のリ�
         reward_list = np.array([self.R_F_far, self.R_g, self.R_div, self.R_L_close, self.R_back, self.R_O, self.R_col])
         
         return reward, reward_list
+    
+    
+    
+    
+    ############ observationのoldを保存
+    L_to_Fs = []
+        cross_list = []
+        L_to_COM = self.F_COM - L.state.p_pos
+        for F in world.followers:
+            L_to_F = F.state.p_pos - L.state.p_pos
+            L_to_F_unit = (F.state.p_pos - L.state.p_pos) / LA.norm(L_to_F)
+            cross_list.append(np.cross(L_to_COM, L_to_F_unit))
+            L_to_F = self.funcs._coord_trans(L_to_F)
+            L_to_F[0] /= self.max_dis_to_agent  if L_to_F[0] < self.max_dis_to_agent else L_to_F[0]  # 正規化
+            L_to_Fs.append(L_to_F)
+        L_to_COM = self.funcs._coord_trans(L_to_COM)
+        L_to_COM[0] /= self.max_dis_to_agent  if L_to_COM[0] < self.max_dis_to_agent else L_to_COM[0]  # 正規化
+        # to do: フォロワの並び替えの方法もう少し考える．
+        # self.L_to_Fs_deques[i].append([L_to_COM, L_to_Fs[np.argmin(cross_list)], L_to_Fs[np.argmax(cross_list)]])
+        L_to_Fs = np.array(L_to_Fs)
+        L_to_Fs = L_to_Fs[np.argsort(L_to_Fs[:, 0])]
+        self.L_to_Fs_deques[i].append(L_to_Fs.tolist())
