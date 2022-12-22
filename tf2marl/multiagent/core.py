@@ -242,6 +242,8 @@ class World(object):
         self.contact_margin = 1e-3
         # record episode num
         self.num_episodes = 0
+        # for rendering
+        self.box = []
 
     # return all entities in the world
     @property
