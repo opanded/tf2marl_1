@@ -248,7 +248,9 @@ class RLLogger(object):
             over_rate = 100 * self.num_over / (self.episode_count + 1)
             self._run.log_scalar('done_info', 
                                  f"success_rate: {success_rate}% divide_rate: {divide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
-
+            print(('done_info', 
+                  f"success_rate: {success_rate}% divide_rate: {divide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
+)
     @property
     def cur_episode_reward(self):
         return self.episode_rewards[-1]
