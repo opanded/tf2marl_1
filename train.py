@@ -55,12 +55,12 @@ elif input == 3:
 else: print("Invalid value!"); sys.exit()
 
 
-scenario = f'sheperding_st1'
+scenario = f'sheperding_st2'
 num_lstm = 16
 policy_idx = 0
 policy_list = ["maddpg", "matd3", "masac"]
-load_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/any_Fs/circle_1/models"
-save_dir = f"learned_results/sheperding_st1/{policy_list[policy_idx]}_LSTM{num_lstm}/any_Fs"
+load_dir = f"learned_results/sheperding_st2/{policy_list[policy_idx]}_LSTM{num_lstm}/6_Fs/add_L_to_des/2/models"
+save_dir = f"learned_results/sheperding_st2/{policy_list[policy_idx]}_LSTM{num_lstm}/any_Fs/add_L_to_des"
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -81,11 +81,16 @@ def train_config():
     
     # Environment
     scenario_name = scenario # environment name
-    num_episodes = 40000            # total episodes
+    num_eval_episodes = 1000
     if scenario == "sheperding_st1":
         max_episode_len = 550           # timesteps per episodes
-    else: max_episode_len = 700
-    num_eval_episodes = 1000
+        num_episodes = 40000            # total episodes
+    elif scenario == "sheperding_st2":
+        max_episode_len = 700           # timesteps per episodes
+        num_episodes = 20000
+    else: 
+        max_episode_len = 850
+        num_episodes = 40000           # total episodes
     
     # Agent Parameters
     good_policy = policy_list[policy_idx]          # policy of "good" agents in env
@@ -118,10 +123,10 @@ def train_config():
 
     # MATD3
     if good_policy == 'tf2marl':
-        policy_update_rate = 2      # Frequency of policy updates, compared to critic
+        policy_update_rate = 1      # Frequency of policy updates, compared to critic
     else:
         policy_update_rate = 2
-    critic_action_noise_stddev = 0.0  # Added noise in critic updates
+    critic_action_noise_stddev = 0.02  # Added noise in critic updates
     action_noise_clip = 0.5         # limit for this noise
 
     # MASAC
@@ -234,7 +239,7 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
         logger.train_step += 1
 
         # policy updates
-        train_cond = not display
+        train_cond = not display and not evaluate
         for agent in agents:
             if train_cond and len(agent.replay_buffer) > batch_size * max_episode_len:
                 if logger.train_step % update_rate == 0:  # only update every 100 steps
