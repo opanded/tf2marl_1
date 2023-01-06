@@ -111,7 +111,7 @@ class MATD3Agent(AbstractAgent):
         # training target (i.e. target in MSE loss) for the critic update.
         target_act_next = [ag.target_action(obs) for ag, obs in zip(agents, next_obs_n)]
         noise = np.random.normal(0, self.target_policy_smoothing_eps, size=target_act_next[self.agent_index].shape)
-        noise = np.clip(noise, -0.5, 0.5)
+        noise = np.clip(noise, -0.05, 0.05)
         target_act_next[self.agent_index] += noise
 
         critic_outputs = np.empty([2, self.batch_size], dtype=np.float32)  # this is a lot faster than python list plus minimum
