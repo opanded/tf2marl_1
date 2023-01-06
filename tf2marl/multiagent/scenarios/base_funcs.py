@@ -7,26 +7,9 @@ class Basefuncs():
     def _make_rand_sign(self):
         if np.random.rand() <= 0.5: return 1
         else: return -1
+        
 
-
-    def _set_F_pos(self, world):
-        F_pos = []
-        # 3台ずつ列状に並べる
-        if len(world.followers) == 4:
-            n = 2
-        else:
-            n = 3
-        m = -(-len(world.followers) // n) # m: 列数，演算子を用いて切り上げをしている
-        F_ref_coord = np.array([5 * (2 * np.random.rand() - 1), (2 * np.random.rand() - 1)])
-        F_width = world.followers[0].r_F["r4"]
-        for i in range(m): 
-            for j in range(n):
-                F_next_coord = np.array([F_ref_coord[0] + j * F_width, i * F_width])  
-                F_pos.append(F_next_coord)
-
-        return F_pos    
-
-    def _set_circle_F_pos(self, world, ini_dis_to_des, angle_des):
+    def _set_F_pos_st1(self, world, ini_dis_to_des, angle_des):
         fol_width = world.followers[0].r_F["r4"]
         
         if len(world.followers) <= 6:
@@ -57,36 +40,27 @@ class Basefuncs():
                 fol_pos.append(next_fol_pos3)
 
         return fol_pos     
-
-
-    def _set_front_L_pos(self, world, F_pos, num_front_Ls):
-        front_L_pos = []
-        # 左側前方のフォロワを基準にする
-        front_L_ref_coord = np.array([F_pos[-1][0], F_pos[-1][1]])
-        L_width = world.followers[0].r_L["r5d"]
-        # 台数分の初期位置を定義する
-        for i in range(num_front_Ls):
-            front_leader_next_coord = np.array([front_L_ref_coord[0] - i * L_width + np.random.rand()\
-                                                    ,front_L_ref_coord[1] + L_width * 1.1]) 
-            front_L_pos.append(front_leader_next_coord)
-        
-        return front_L_pos
-
-    def _set_O_pos_st1(self, world, F_pos, des):
-        # フォロワと目的地の中点
-        # obstacle_ref_coord = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
-        # obstacle_ref_coord = F_pos[0] + (self.des - F_pos[0]) / 2
-        O_ref_coord = F_pos[0] + 20
-        O_pos = []
-        for i in range(len(world.obstacles)):
-            O_next_coord = np.array([O_ref_coord[0] + i * 3, O_ref_coord[1]]) 
-            O_pos.append(O_next_coord)
-        
-        return O_pos
     
-    def _set_O_pos_st2(self, world, F_pos, des):
-        # フォロワと目的地の中点
-        # obstacle_ref_coord = F_pos[0] + 2 * (self.des - F_pos[0]) / 3
+
+    def _set_F_pos(self, world):
+        F_pos = []
+        # 3台ずつ列状に並べる
+        if len(world.followers) == 4:
+            n = 2
+        else:
+            n = 3
+        m = -(-len(world.followers) // n) # m: 列数，演算子を用いて切り上げをしている
+        F_ref_coord = np.array([5 * (2 * np.random.rand() - 1), (2 * np.random.rand() - 1)])
+        F_width = world.followers[0].r_F["r4"]
+        for i in range(m): 
+            for j in range(n):
+                F_next_coord = np.array([F_ref_coord[0] + j * F_width, i * F_width])  
+                F_pos.append(F_next_coord)
+
+        return F_pos    
+
+
+    def _set_O_pos(self, world, F_pos, des):
         O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
         O_ref_coord[0] -= 3 * np.random.rand()
         O_pos = []
@@ -98,49 +72,28 @@ class Basefuncs():
         
         return O_pos
     
-    
-    def _set_back_L_pos_st1(self, world, F_pos, num_back_Ls):
-        back_L_pos = []
-        # 一定の確率でリーダーをランダムに配置
-        if np.random.rand() <= 0.5:
-          # 右側後方のフォロワを基準にする
-          back_L_ref_coord = np.array([F_pos[0][0], F_pos[0][1]])
-          L_width = 1.75 * world.followers[0].r_L["r5d"]
-          # 台数分の初期位置を定義する
-          for i in range(num_back_Ls):
-              back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand()\
-                                                      ,back_L_ref_coord[1] - L_width * 1.1]) 
-              back_L_pos.append(back_L_next_coord)
-        else: 
-          # 左側前方のフォロワを基準にする
-          back_L_ref_coord = np.array([F_pos[-1][0], F_pos[-1][1]])
-          L_width = 1.75 * world.followers[0].r_L["r5d"]
-          # 台数分の初期位置を定義する
-          for i in range(num_back_Ls):
-              back_L_next_coord = np.array([back_L_ref_coord[0] - i * L_width + np.random.rand()\
-                                                      ,back_L_ref_coord[1] + L_width * 1.1]) 
-              back_L_pos.append(back_L_next_coord)
+    def _set_crossing_O_pos(self, world, F_pos, des):
+        O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
+        O_pos = []
+        O_width = world.followers[0].r_F["r4"] * 6
+        for i in range(len(world.obstacles)):
+            y_rand = 2 * (2 * np.random.rand() - 1)
+            if np.random.rand() <= 0.5:  # 左側に初期配置，右側にゴール
+                O_next_coord = np.array([O_ref_coord[0] - (0.6 * np.random.rand() + O_width), 
+                                        O_ref_coord[1] + y_rand])
+                world.obstacles[i].goal = np.array([O_ref_coord[0] + (0.6 * np.random.rand() + O_width), 
+                                                    O_ref_coord[1] - y_rand])
+            else:  # 右側に初期配置，左側にゴール
+                O_next_coord = np.array([O_ref_coord[0] + (0.6 * np.random.rand() + O_width), 
+                                        O_ref_coord[1] + y_rand])
+                world.obstacles[i].goal = np.array([O_ref_coord[0] - (0.6 * np.random.rand() + O_width), 
+                                                    O_ref_coord[1] - y_rand])
+            
+            O_pos.append(O_next_coord)
         
-        return back_L_pos
+        return O_pos
 
-    def _set_back_L_pos_st2(self, world, F_pos, num_back_Ls):
-        if len(world.followers) <= 6:
-            L_width = world.followers[0].r_L["r5d"] * 1.5
-        else: 
-            L_width = world.followers[0].r_L["r5d"] * 2
-        # 右側後方のフォロワを基準にする
-        back_L_ref_coord = np.array([F_pos[0][0], F_pos[0][1]])
-        # 台数分の初期位置を定義する
-        back_L_pos = []
-        for i in range(num_back_Ls):
-            back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand() 
-                                        ,back_L_ref_coord[1] - L_width * 1.1])
-            back_L_pos.append(back_L_next_coord)
-        
-        return back_L_pos
-
-
-    def _set_circle_back_L_pos(self, world, ini_dis_to_des, angle_des):
+    def _set_L_pos_st1(self, world, ini_dis_to_des, angle_des):
         if len(world.followers) <= 6:
             L_width = world.followers[0].r_L["r5d"] * 1.5
         else: 
@@ -159,6 +112,24 @@ class Basefuncs():
         
         return back_L_pos
     
+    
+    def _set_L_pos(self, world, F_pos, num_back_Ls):
+        if len(world.followers) <= 6:
+            L_width = world.followers[0].r_L["r5d"] * 1.5
+        else: 
+            L_width = world.followers[0].r_L["r5d"] * 2
+        # 右側後方のフォロワを基準にする
+        back_L_ref_coord = np.array([F_pos[0][0], F_pos[0][1]])
+        # 台数分の初期位置を定義する
+        back_L_pos = []
+        for i in range(num_back_Ls):
+            back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand() 
+                                        ,back_L_ref_coord[1] - L_width * 1.1])
+            back_L_pos.append(back_L_next_coord)
+        
+        return back_L_pos
+
+
     def _rotate_axis(self, F_pos, F_width, angle):
         if len(F_pos) <= 6:
             new_F_pos = [F_pos[0], np.array([F_pos[0][0] + F_width * np.sin(-angle),
@@ -186,15 +157,6 @@ class Basefuncs():
                 new_F_pos.append(next_fol_pos3)
         
         return new_F_pos
-
-    # return all agents that are back of swarm
-    def _back_Ls(self, world):
-        return [L for L in world.agents if not L.front]
-
-    # return all front of swarm
-    def _front_Ls(self, world):
-        return [L for L in world.agents if L.front]
-
     ###########################################  For reward, observation, check_done ###########################################
 
     def _coord_trans(self, coord_bef: np.array) -> np.array:
@@ -238,13 +200,14 @@ class Basefuncs():
         return dis_to_des
 
 
-    def _calc_Fs_min_dis_to_O(self, world):
+    def _calc_Fs_min_dis_to_Os(self, world):
         min_dis_to_Os = []
         min_dis_to_O = np.inf
         for O in world.obstacles:
             for F in world.followers:
-                F_dis_to_O = LA.norm(O.state.p_pos - F.state.p_pos)
-                if F_dis_to_O < min_dis_to_O: min_dis_to_O = F_dis_to_O
+                # 障害物表面からの距離を計算する
+                F_to_O_dis = LA.norm(O.state.p_pos - F.state.p_pos) - O.size
+                if F_to_O_dis < min_dis_to_O: min_dis_to_O = F_to_O_dis
         min_dis_to_Os.append(min_dis_to_O)
         
         return min_dis_to_Os
