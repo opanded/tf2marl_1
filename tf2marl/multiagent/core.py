@@ -88,13 +88,14 @@ class Follower(Entity):
         # 微小な値
         self.delta = 10e-2
         # フォロワ間作用の係数
-        self.k_FF_coh = 2.25; self.k_FF_col = 3; self.k_FF_bar = 100;
+        self.k_FF_coh = 2; self.k_FF_col = 3; self.k_FF_bar = 100;
         # リーダーフォロワ間の係数
         self.k_FL_col = 2; self.k_FL_bar = 100;   
         # フォロワ-障害物間作用の係数
         self.k_Fland_coh = 0; self.k_Fland_col = 3; self.k_Fland_bar = 100;
         # フォロワのrendering時の色
         self.color = np.array([0, 0, 1])
+        self.id = 0
         
     def __calc_vec_FF(self, followers):
         # フォロワiに対するフォロワjと障害物の相対ベクトルの取得
@@ -199,30 +200,53 @@ class Follower(Entity):
         # followerの入力
         self.state.p_vel =  final_vel_FF + final_vel_FL
         
-# properties of obstacles entities
+# 静止，その場で動くobstacle
 class Obstacle(Entity):
     def __init__(self):
         super(Obstacle, self).__init__()
         self.color = np.array([0, 0.5, 0])
         self.have_vel = False
+        self.have_goal = False
         self.max_speed = 0.5
         self.init_pos = np.array([0, 0])
-        self.max_range = 1
-        self.have_goal = False
-        self.goal = np.array([0, 0])
+        self.max_range = 1.0
     def set_vel(self):
-        if not self.have_goal:
-            x_sign = -1. if np.random.rand() < 0.01 else 1.
-            y_sign = -1. if np.random.rand() < 0.01 else 1.
-            if LA.norm(self.state.p_pos - self.init_pos) >= self.max_range:
-                x_sign = -1.
-                y_sign = -1.
-            self.state.p_vel[0] *= x_sign
-            self.state.p_vel[1] *= y_sign
-            self.state.p_vel = self.state.p_vel.clip(-self.max_speed, self.max_speed)
+        x_sign = -1. if np.random.rand() < 0.01 else 1.
+        y_sign = -1. if np.random.rand() < 0.01 else 1.
+        if LA.norm(self.state.p_pos - self.init_pos) >= self.max_range:
+            x_sign = -1.
+            y_sign = -1.
+        self.state.p_vel[0] *= x_sign
+        self.state.p_vel[1] *= y_sign
+        self.state.p_vel = self.state.p_vel.clip(-self.max_speed, self.max_speed)
+
+# crossingするobstacle
+class Obstacle_cross(Entity):
+    def __init__(self):
+        super(Obstacle_cross, self).__init__()
+        self.color = np.array([0, 0.5, 0])
+        self.goal = np.array([0, 0])
+        self.goal_changed = False
+        self.speed = 0
+        self.start_step = 0
+        self.step = 0
+        self.close = False
+        self.have_vel = False
+        self.have_goal = True
+    def set_vel(self):
+        # start_stepまでは待機
+        if self.step < self.start_step:
+            self.state.p_vel = np.array([0, 0])
         else:
+            # 0.3%の確率でゴールの位置を変更する
+            if not self.goal_changed and np.random.rand() <= 0.003:
+                y_rand = 3 * (2 * np.random.rand() - 1)
+                self.goal[1] += y_rand
+                self.goal_changed = True
+            # goalまで一定速度で進む      
             unit_vec = (self.goal - self.state.p_pos) / LA.norm(self.goal - self.state.p_pos)
-            self.state.p_vel = 0.4 * unit_vec
+            self.state.p_vel = self.speed * unit_vec
+        self.step += 1
         
 # multi-agent world
 class World(object):
@@ -333,8 +357,20 @@ class World(object):
             follower.state.p_pos += follower.state.p_vel * self.dt
         # obstacleの位置を更新
         for i, obstacle in enumerate(self.obstacles):
-            if obstacle.have_vel or obstacle.have_goal:
-                obstacle.set_vel()  # 毎時刻速度を変える
+            if obstacle.have_vel:
+                obstacle.set_vel()
+                # 位置を更新
+                obstacle.state.p_pos += obstacle.state.p_vel * self.dt
+            elif obstacle.have_goal:
+                obstacle.speed = 0.3 + (2 * np.random.rand() - 1) * 0.1
+                # followerとのmin距離を計算
+                min_dis = np.inf
+                for F in self.followers:
+                    dis = LA.norm(F.state.p_pos - obstacle.state.p_pos) - obstacle.size
+                    if dis < min_dis: min_dis = dis
+                # if min_dis <= 1: obstacle.speed /= 2
+                obstacle.set_vel()
+                # 位置を更新
                 obstacle.state.p_pos += obstacle.state.p_vel * self.dt    
             
     def __update_agent_state(self, agent):
