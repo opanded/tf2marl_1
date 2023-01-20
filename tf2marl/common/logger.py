@@ -68,6 +68,7 @@ class RLLogger(object):
         self.num_success = 0
         self.num_divide = 0
         self.num_exceed = 0
+        self.num_collide = 0
         self.num_over = 0
 
     def record_episode_end(self, agents, display):
@@ -238,6 +239,9 @@ class RLLogger(object):
         elif "exceed" in info_n:
             self._run.log_scalar('done_info', f"{self.episode_count}: exceed")
             self.num_exceed += 1
+        elif "collide" in info_n:
+            self._run.log_scalar('done_info', f"{self.episode_count}: exceed")
+            self.num_collide += 1
         else:
             self._run.log_scalar('done_info', f"{self.episode_count}: over")
             self.num_over += 1
@@ -245,11 +249,12 @@ class RLLogger(object):
             success_rate = 100 * self.num_success / (self.episode_count + 1)
             divide_rate = 100 * self.num_divide / (self.episode_count + 1)
             exceed_rate = 100 * self.num_exceed / (self.episode_count + 1)
+            collide_rate = 100 * self.num_collide / (self.episode_count + 1)
             over_rate = 100 * self.num_over / (self.episode_count + 1)
             self._run.log_scalar('done_info', 
-                                 f"success_rate: {success_rate}% divide_rate: {divide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
+                                 f"success_rate: {success_rate}% divide_rate: {divide_rate}% collide_rate: {collide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
             print(('done_info', 
-                  f"success_rate: {success_rate}% divide_rate: {divide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
+                  f"success_rate: {success_rate}% divide_rate: {divide_rate}% collide_rate: {collide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
 )
     @property
     def cur_episode_reward(self):
