@@ -28,7 +28,7 @@ if list_gpu:
     for i in range(len(list_gpu)):
         tf.config.experimental.set_memory_growth(list_gpu[i], True)
 
-train_ex = Experiment('sheperding_st1')
+train_ex = Experiment('avoide_obstacle')
 
 ### set global variable ###
 input = int(input("input val[0 -> train, 1 -> add_learning, 2 -> display, 3 -> evaluate]:"))
@@ -55,12 +55,10 @@ elif input == 3:
 else: print("Invalid value!"); sys.exit()
 
 
-scenario = f'sheperding_st2'
-num_lstm = 16
-policy_idx = 0
-policy_list = ["maddpg", "matd3", "masac"]
-load_dir = f"learned_results/sheperding_st2/{policy_list[policy_idx]}_LSTM{num_lstm}/6_Fs/add_L_to_des/2/models"
-save_dir = f"learned_results/sheperding_st2/{policy_list[policy_idx]}_LSTM{num_lstm}/any_Fs/add_L_to_des"
+scenario = f'stage3'
+
+load_dir = f"learned_results/stage3/any_Fs/no_cluster/11/models"
+save_dir = f"learned_results/stage3/any_Fs/no_cluster"
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -81,19 +79,19 @@ def train_config():
     
     # Environment
     scenario_name = scenario # environment name
-    num_eval_episodes = 1000
-    if scenario == "sheperding_st1":
-        max_episode_len = 550           # timesteps per episodes
-        num_episodes = 40000            # total episodes
-    elif scenario == "sheperding_st2":
-        max_episode_len = 700           # timesteps per episodes
-        num_episodes = 20000
+    num_eval_episodes = 500
+    if scenario == "stage1":
+        max_episode_len = 600           # timesteps per episodes
+        num_episodes = 30000            # total episodes
+    elif scenario == "stage2":
+        max_episode_len = 750           # timesteps per episodes
+        num_episodes = 30000
     else: 
         max_episode_len = 850
-        num_episodes = 40000           # total episodes
+        num_episodes = 30000           # total episodes
     
     # Agent Parameters
-    good_policy = policy_list[policy_idx]          # policy of "good" agents in env
+    good_policy = "maddpg"          # policy of "good" agents in env
     adv_policy = 'matd3'           # policy of adversary agents in env
     # available agent: maddpg, matd3, mad3pg, masac
 
@@ -103,7 +101,7 @@ def train_config():
     batch_size = 1024               # batch size for training
     num_layers = 2                  # hidden layers per network
     num_units = 64                  # units per hidden layer
-    num_lstm_units = num_lstm             # units per lstm layer 
+    num_lstm_units = 16             # units per lstm layer 
 
     update_rate = 100               # update policy after each x steps
     critic_zero_if_done = False     # set the value to zero in terminal steps
