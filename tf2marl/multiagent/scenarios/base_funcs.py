@@ -62,9 +62,9 @@ class Basefuncs():
 
     def _set_O_pos(self, world, F_pos, des):
         O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
-        O_ref_coord[0] -= 3 * np.random.rand()
+        if len(world.obstacles) != 1: O_ref_coord[0] -= 3 * np.random.rand()
         O_pos = []
-        O_width = world.followers[0].r_F["r4"] * 6
+        O_width = world.followers[0].r_F["r4"] * (len(world.followers) + 1)
         for i in range(len(world.obstacles)):
             O_next_coord = np.array([O_ref_coord[0] - 0.6 * np.random.rand() + i * O_width, 
                                      O_ref_coord[1] + (2 * np.random.rand() - 1)]) 
@@ -73,21 +73,29 @@ class Basefuncs():
         return O_pos
     
     def _set_crossing_O_pos(self, world, F_pos, des):
-        O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
+        F_COM = np.sum(F_pos, axis=0) / len(world.followers)
+        O_ref_coord = F_COM + (des - F_COM) / 2
         O_pos = []
         O_width = world.followers[0].r_F["r4"] * 6
+        
+        if np.random.rand() <= 0.5: sign = 0
+        else: sign = 1
+        
         for i in range(len(world.obstacles)):
-            y_rand = 2 * (2 * np.random.rand() - 1)
-            if np.random.rand() <= 0.5:  # 左側に初期配置，右側にゴール
-                O_next_coord = np.array([O_ref_coord[0] - (0.6 * np.random.rand() + O_width), 
+            # y_rand = 2 * (2 * np.random.rand() - 1)
+            y_rand = 1 + 2 * np.random.rand()  # スタートを上側，ゴールを下側に設定する．
+            if sign == 0:  # 左側に初期配置，右側にゴール
+                O_next_coord = np.array([O_ref_coord[0] - (O_width - 1.5 * np.random.rand()), 
                                         O_ref_coord[1] + y_rand])
-                world.obstacles[i].goal = np.array([O_ref_coord[0] + (0.6 * np.random.rand() + O_width), 
+                world.obstacles[i].goal = np.array([O_ref_coord[0] + O_width, 
                                                     O_ref_coord[1] - y_rand])
+                sign = 1
             else:  # 右側に初期配置，左側にゴール
-                O_next_coord = np.array([O_ref_coord[0] + (0.6 * np.random.rand() + O_width), 
+                O_next_coord = np.array([O_ref_coord[0] + (O_width - 1.5 * np.random.rand()), 
                                         O_ref_coord[1] + y_rand])
                 world.obstacles[i].goal = np.array([O_ref_coord[0] - (0.6 * np.random.rand() + O_width), 
                                                     O_ref_coord[1] - y_rand])
+                sign = 0
             
             O_pos.append(O_next_coord)
         
@@ -118,12 +126,14 @@ class Basefuncs():
             L_width = world.followers[0].r_L["r5d"] * 1.5
         else: 
             L_width = world.followers[0].r_L["r5d"] * 2
+        rand = (2 * np.random.rand() - 1)
         # 右側後方のフォロワを基準にする
         back_L_ref_coord = np.array([F_pos[0][0], F_pos[0][1]])
+        back_L_ref_coord[0] += rand
         # 台数分の初期位置を定義する
         back_L_pos = []
         for i in range(num_back_Ls):
-            back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width + np.random.rand() 
+            back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width 
                                         ,back_L_ref_coord[1] - L_width * 1.1])
             back_L_pos.append(back_L_next_coord)
         
@@ -219,20 +229,20 @@ class Basefuncs():
         F_COM = F_sum / len(world.followers)
         
         return F_COM
+    
+    def _calc_min_dis(self, L, world):
+        min_dis_to_obj = np.inf
+        for obj_j in world.entities:
+            if L is obj_j: continue
+            dist = LA.norm(obj_j.state.p_pos - L.state.p_pos) - (L.size + obj_j.size)
+            if dist < min_dis_to_obj:
+                min_dis_to_obj = dist
+        
+        return min_dis_to_obj
+
 
     def _check_col(self, L, world):
         is_col = False
-        # リーダーとその他の物体との衝突のみ判定する
-        # for obj_i in world.entities:
-        #     for obj_j in world.entities:
-        #         if obj_i is obj_j: continue
-        #         delta_pos = obj_j.state.p_pos - obj_i.state.p_pos
-        #         dist = LA.norm(delta_pos)
-        #         dist_min = obj_i.size + obj_i.size
-        #         if dist < dist_min:
-        #             is_col = True
-        #             break
-        #     if is_col: break
         for obj_j in world.entities:
             if L is obj_j: continue
             dist = LA.norm(obj_j.state.p_pos - L.state.p_pos)
