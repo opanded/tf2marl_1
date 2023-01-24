@@ -55,11 +55,10 @@ elif input == 3:
 else: print("Invalid value!"); sys.exit()
 
 
-scenario = f'stage2'
-
-load_dir = f"learned_results/stage3/any_Fs/R_back_16h/1/models"
-save_dir = f"learned_results/stage2/any_Fs/4h_4-9Fs_final_R_back"
-learning_time = 4
+scenario = f'stage3'
+load_dir = f"learned_results/stage3/any_Fs/no_cahnge_16h/1/models"
+save_dir = f"learned_results/stage3/any_Fs/4h_4-9Fs_final_no_R_back"
+learning_time = 10
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -193,7 +192,8 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
             # fp = os.path.join(restore_fp, 'agent_0')
             agent.load(fp)
 
-    obs_n, pos_dict = env.reset()
+    obs_n = env.reset()
+    pos_list = []
 
     print('Starting iterations...')
     while True:
@@ -228,11 +228,13 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
 
         if done:
             if display and not evaluate:
-                logger.save_demo_result(pos_dict, env.reward_list_all)
+                num_objs = [int(len(env.world.agents)), int(len(env.world.followers)), int(len(env.world.obstacles))]
+                logger.save_demo_result(pos_list, num_objs, env.reward_list_all)
+                pos_list.clear()
             if display and evaluate:
                 logger.save_eval_result(info_n, num_eval_episodes, save_movie)
                 
-            obs_n, pos_dict = env.reset()
+            obs_n = env.reset()
             logger.record_episode_end(agents, display)
 
         logger.train_step += 1
@@ -251,11 +253,22 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
             if save_movie:
                 img = env.render('rgb_array')[0]
                 logger.all_frames.append(img)
+                # 各step毎のオブジェクトの位置を保存
+                pos_list_1_step = []
+                for L in env.world.agents:
+                    pos_list_1_step.append(L.state.p_pos)
+                F_sum = np.array([0., 0.])
+                for F in env.world.followers:
+                    pos_list_1_step.append(F.state.p_pos)
+                    F_sum += F.state.p_pos
+                F_COM = F_sum / len(env.world.followers)
+                pos_list_1_step.append(F_COM)
+                for O in env.world.obstacles:
+                    pos_list_1_step.append(O.state.p_pos)
+                pos_list.append(np.concatenate(pos_list_1_step))
             if evaluate and len(logger.episode_rewards) > num_eval_episodes:
                 logger.experiment_end()
                 return None
-        # img = env.render('rgb_array')[0]
-        # time.sleep(0.05)
         # saves logger outputs to a file similar to the way in the original MADDPG implementation
         if len(logger.episode_rewards) > num_episodes or (time.time() - logger.t_start) >= 3600 * learning_time:
             logger.experiment_end()

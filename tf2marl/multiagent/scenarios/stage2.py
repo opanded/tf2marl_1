@@ -48,8 +48,8 @@ class Scenario(BaseScenario):
     
     def reset_world(self, world):
         # # フォロワの数をエピソード毎に変化させる
-        self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
-        world.followers = [Follower() for i in range(self.num_Fs)]
+        # self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
+        # world.followers = [Follower() for i in range(self.num_Fs)]
         # 障害物の数をエピソード毎に変化させる
         self.num_Os = random.choice([1, 2, 3])
         world.obstacles = [Obstacle() for i in range(self.num_Os)]
@@ -66,9 +66,7 @@ class Scenario(BaseScenario):
         #    tmp = self.L_pos[L_i]
         #    self.L_pos[L_i] = self.L_pos[L_j]
         #    self.L_pos[L_j] = tmp
-        # 初期位置を記録するための配列
-        pos_dict = {"follower": copy.deepcopy(self.F_pos),"leader": copy.deepcopy(self.L_pos),
-                    "obstacle": copy.deepcopy(self.O_pos),"dest": [copy.deepcopy(self.des)]}
+        
         # set leader's random initial states
         for i, L in enumerate(world.agents):
             L.state.p_pos = self.L_pos[i]
@@ -105,7 +103,7 @@ class Scenario(BaseScenario):
         # 各障害物の位置
         self.Os_old = [O.state.p_pos for O in world.obstacles]
             
-        return self.des, self.rho_g, self.funcs._calc_F_COM, pos_dict
+        return self.des, self.rho_g, self.funcs._calc_F_COM
     
     def reward(self, L, world):
         L_idx = int(L.name.replace('leader_', ''))

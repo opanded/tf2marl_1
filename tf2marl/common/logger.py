@@ -7,6 +7,7 @@ import tensorflow as tf
 import cv2
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 class RLLogger(object):
     def __init__(self, exp_name, _run, n_agents, n_adversaries, save_rate):
@@ -162,7 +163,75 @@ class RLLogger(object):
     def get_sacred_results(self):
         return np.array(self.episode_rewards), np.array(self.agent_rewards)
     
-    def save_demo_result(self, pos_dict, reward_list_all):
+    def draw_pos_fig(self, pos_list, num_Ls, num_Fs, num_Os, save_dir):
+        data_pos = np.array(pos_list)
+        fig = plt.figure(figsize=(12, 10))
+        ax = fig.add_subplot(1, 1, 1)
+        mid_idx = int(len(data_pos) / 2)
+        ax.set_xlim(-8.5, 8.5)
+        ax.set_ylim(-5, 12.5)
+        goal = patches.Circle(xy=(0, 8), radius=1.25, fc='gray')
+        ax.add_patch(goal)
+        # leader
+        for i in range(num_Ls):
+            idx = i * 2
+            radius = 0.075
+            col = "r"
+            if i == 0:
+                ax.plot(list(data_pos[0:, idx]), list(data_pos[0:, idx + 1])
+                        , linewidth=0.75, color="r", label="Leader")
+            else:
+                ax.plot(list(data_pos[0:, idx]), list(data_pos[0:, idx + 1])
+                        , linewidth=0.75, color="r")
+            L_ini = patches.Circle(xy=(data_pos[0, idx], data_pos[0, idx + 1]), radius=radius, fc=col)
+            L_fi = patches.Circle(xy=(data_pos[-1, idx], data_pos[-1, idx + 1]), radius=radius, fc=col)
+            L_mid = patches.Circle(xy=(data_pos[mid_idx, idx], data_pos[mid_idx, idx + 1]), radius=radius, fc=col)
+            ax.add_patch(L_ini); ax.add_patch(L_mid); ax.add_patch(L_fi)
+        # follower
+        for j in range(num_Fs):
+            idx = (num_Ls * 2) + j * 2
+            radius = 0.075
+            col = "b"
+            if j == 0:
+                ax.plot(list(data_pos[0:, idx]), list(data_pos[0:, idx + 1])
+                    , linewidth=0.75, color="b", label="Follower")
+            else: 
+                ax.plot(list(data_pos[0:, idx]), list(data_pos[0:, idx + 1])
+                    , linewidth=0.75, color="b")
+            F_ini = patches.Circle(xy=(data_pos[0, idx], data_pos[0, idx + 1]), radius=radius, fc=col)
+            F_fi = patches.Circle(xy=(data_pos[-1, idx], data_pos[-1, idx + 1]), radius=radius, fc=col)
+            F_mid = patches.Circle(xy=(data_pos[mid_idx, idx], data_pos[mid_idx, idx + 1]), radius=radius, fc=col)
+            ax.add_patch(F_ini); ax.add_patch(F_mid); ax.add_patch(F_fi)
+        # COM
+        idx = (num_Ls + num_Fs) * 2
+        col = "g"
+        F_COM_ini = patches.Rectangle(xy=(data_pos[0, idx], data_pos[0, idx + 1]), width=0.15, height=0.15, fc=col)
+        F_COM_fi = patches.Rectangle(xy=(data_pos[-1, idx], data_pos[-1, idx + 1]), width=0.15, height=0.15, fc=col)
+        F_COM_mid = patches.Rectangle(xy=(data_pos[mid_idx, idx], data_pos[mid_idx, idx + 1]), width=0.15, height=0.15, fc=col)
+        ax.add_patch(F_COM_ini); ax.add_patch(F_COM_mid); ax.add_patch(F_COM_fi)
+        # obstacle
+        for k in range(num_Os):
+            idx = ((num_Ls + num_Fs + 1) * 2) + k * 2 
+            radius = 0.075
+            col = "g"
+            if k == 0:
+                ax.plot(list(data_pos[0:, idx]), list(data_pos[0:, idx + 1])
+                    , linewidth=0.75, color="g", label="Obstacle")
+            else:
+                ax.plot(list(data_pos[0:, idx]), list(data_pos[0:, idx + 1])
+                    , linewidth=0.75, color="g") 
+            O_ini = patches.Circle(xy=(data_pos[0, idx], data_pos[0, idx + 1]), radius=radius, fc=col)
+            O_fi = patches.Circle(xy=(data_pos[-1, idx], data_pos[-1, idx + 1]), radius=radius, fc=col)
+            O_mid = patches.Circle(xy=(data_pos[mid_idx, idx], data_pos[mid_idx, idx + 1]), radius=radius, fc=col)
+            ax.add_patch(O_ini); ax.add_patch(O_mid); ax.add_patch(O_fi)
+        ax.set_xlabel("x", fontsize=24); ax.set_ylabel("y", fontsize=24)
+        ax.set_aspect('equal')
+        ax.grid()
+        fig.legend(labelsize=18)
+        fig.savefig(f"{save_dir}/positions.png")
+        # plt.show() 
+    
+    def save_demo_result(self, pos_list, num_objs, reward_list_all):
         result_epi_dir = os.path.join(self.ex_path, "run_" + str(self.episode_count).zfill(2))
         os.makedirs(result_epi_dir, exist_ok = True)             
         # save mp4
@@ -172,13 +241,14 @@ class RLLogger(object):
             save.write(img)
         save.release()
         self.all_frames.clear()
-        # save inital position                    
-        result_pos_dir = os.path.join(result_epi_dir, "init_pos")
-        os.makedirs(result_pos_dir, exist_ok = True)             
-        for key, pos in pos_dict.items():
-            with open(f'{str(result_pos_dir)}/{key}.csv', 'w') as pos_file:
-                np.savetxt(pos_file, [len(pos)])
-                np.savetxt(pos_file, pos)
+        # save position           
+        # with open(f'{str(result_epi_dir)}/position.csv', 'w') as pos_file:
+        #     header = [i for i in range((num_objs[0] + num_objs[1] + num_objs[2] + 1) * 2)]
+        #     for j in range(len(header) - len(num_objs)):
+        #         num_objs.append(0)
+        #     pd.DataFrame([num_objs]).to_csv(pos_file, index=False, header= header) 
+        #     pd.DataFrame(np.array(pos_list)).to_csv(pos_file, index=False, header= False)
+        self.draw_pos_fig(pos_list, *num_objs, result_epi_dir)
         # save rewards
         result_rew_dir = os.path.join(result_epi_dir, "reward")
         os.makedirs(result_rew_dir, exist_ok = True)             
@@ -189,7 +259,7 @@ class RLLogger(object):
             reward_df[i].to_csv(f"{str(result_rew_dir)}/agent{i}_reward.csv", index=False,\
                             header= header_list) 
         
-        reward_list = [[] for _ in range(self.n_agents)]; reward_diff_list = []
+        reward_list = [[] for _ in range(self.n_agents)]
         # tmp_reward = 0
         fig = plt.figure(figsize=(9.5, 10))
         ax_list = [fig.add_subplot(4, 1, 1 * (idx+1)) for idx in range(2 * self.n_agents)]

@@ -118,7 +118,7 @@ class MultiAgentEnv(gym.Env):
 
     def reset(self):
         # reset world
-        self.dest, self.rho_g, self.__calc_F_COM, pos_dict = self.reset_callback(self.world)
+        self.dest, self.rho_g, self.__calc_F_COM = self.reset_callback(self.world)
         # reset renderer
         self._reset_render()
         # record observations for each agent
@@ -129,7 +129,7 @@ class MultiAgentEnv(gym.Env):
             obs_n.append(self._get_obs(agent))
             
         self.world.num_episodes += 1
-        return obs_n, pos_dict
+        return obs_n
 
     # get info used for benchmarking
     def _get_info(self, agent):
@@ -308,7 +308,7 @@ class MultiAgentEnv(gym.Env):
             for geom in self.render_geoms:
                 viewer.add_geom(geom)
 
-        results = []
+        results = []; 
         for i in range(len(self.viewers)):
             # update bounds to center around agent
             cam_range = 10 # 拡大、縮小を決める変数
