@@ -62,12 +62,14 @@ class Basefuncs():
 
     def _set_O_pos(self, world, F_pos, des):
         O_ref_coord = F_pos[0] + (des - F_pos[0]) / 2
-        if len(world.obstacles) != 1: O_ref_coord[0] -= 3 * np.random.rand()
         O_pos = []
         O_width = world.followers[0].r_F["r4"] * (len(world.followers) + 1)
+        if len(world.obstacles) == 2: O_ref_coord[0] -= O_width / 2
+        elif len(world.obstacles) == 3: O_ref_coord[0] -= O_width
+        
         for i in range(len(world.obstacles)):
             O_next_coord = np.array([O_ref_coord[0] - 0.6 * np.random.rand() + i * O_width, 
-                                     O_ref_coord[1] + (2 * np.random.rand() - 1)]) 
+                                     O_ref_coord[1] + np.random.rand()]) 
             O_pos.append(O_next_coord)
         
         return O_pos
@@ -76,7 +78,7 @@ class Basefuncs():
         F_COM = np.sum(F_pos, axis=0) / len(world.followers)
         O_ref_coord = F_COM + (des - F_COM) / 2
         O_pos = []
-        O_width = world.followers[0].r_F["r4"] * 6
+        O_width = world.followers[0].r_F["r4"] * len(world.followers)
         
         if np.random.rand() <= 0.5: sign = 0
         else: sign = 1
@@ -85,13 +87,13 @@ class Basefuncs():
             # y_rand = 2 * (2 * np.random.rand() - 1)
             y_rand = 1 + 2 * np.random.rand()  # スタートを上側，ゴールを下側に設定する．
             if sign == 0:  # 左側に初期配置，右側にゴール
-                O_next_coord = np.array([O_ref_coord[0] - (O_width - 1.5 * np.random.rand()), 
+                O_next_coord = np.array([O_ref_coord[0] - (O_width - (2 * np.random.rand() - 1)), 
                                         O_ref_coord[1] + y_rand])
                 world.obstacles[i].goal = np.array([O_ref_coord[0] + O_width, 
                                                     O_ref_coord[1] - y_rand])
                 sign = 1
             else:  # 右側に初期配置，左側にゴール
-                O_next_coord = np.array([O_ref_coord[0] + (O_width - 1.5 * np.random.rand()), 
+                O_next_coord = np.array([O_ref_coord[0] + (O_width - (2 * np.random.rand() - 1)), 
                                         O_ref_coord[1] + y_rand])
                 world.obstacles[i].goal = np.array([O_ref_coord[0] - (0.6 * np.random.rand() + O_width), 
                                                     O_ref_coord[1] - y_rand])
@@ -134,7 +136,7 @@ class Basefuncs():
         back_L_pos = []
         for i in range(num_back_Ls):
             back_L_next_coord = np.array([back_L_ref_coord[0] + i * L_width 
-                                        ,back_L_ref_coord[1] - L_width * 1.1])
+                                        ,back_L_ref_coord[1] - L_width])
             back_L_pos.append(back_L_next_coord)
         
         return back_L_pos
