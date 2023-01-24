@@ -55,10 +55,11 @@ elif input == 3:
 else: print("Invalid value!"); sys.exit()
 
 
-scenario = f'stage3'
+scenario = f'stage2'
 
-load_dir = f"learned_results/stage3/any_Fs/no_cluster/11/models"
-save_dir = f"learned_results/stage3/any_Fs/no_cluster"
+load_dir = f"learned_results/stage3/any_Fs/R_back_16h/1/models"
+save_dir = f"learned_results/stage2/any_Fs/4h_4-9Fs_final_R_back"
+learning_time = 4
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -75,7 +76,7 @@ def train_config():
     if is_display or add_learning: restore_fp = load_dir
     else: restore_fp = None
     save_path = save_dir                                
-    save_rate = 1000                # frequency to save policy as number of episodes
+    save_rate = 500                # frequency to save policy as number of episodes
     
     # Environment
     scenario_name = scenario # environment name
@@ -84,11 +85,11 @@ def train_config():
         max_episode_len = 600           # timesteps per episodes
         num_episodes = 30000            # total episodes
     elif scenario == "stage2":
-        max_episode_len = 750           # timesteps per episodes
+        max_episode_len = 800           # timesteps per episodes
         num_episodes = 30000
     else: 
-        max_episode_len = 850
-        num_episodes = 30000           # total episodes
+        max_episode_len = 800
+        num_episodes = 70000           # total episodes
     
     # Agent Parameters
     good_policy = "maddpg"          # policy of "good" agents in env
@@ -256,7 +257,7 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
         # img = env.render('rgb_array')[0]
         # time.sleep(0.05)
         # saves logger outputs to a file similar to the way in the original MADDPG implementation
-        if len(logger.episode_rewards) > num_episodes:
+        if len(logger.episode_rewards) > num_episodes or (time.time() - logger.t_start) >= 3600 * learning_time:
             logger.experiment_end()
             return logger.get_sacred_results()
 

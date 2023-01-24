@@ -83,17 +83,16 @@ class RLLogger(object):
             self.agent_rewards[ag_idx].append(0.0)
 
         if not display:
+            # episodeではなく10分おきに保存するようにする．
             # save_rateの10倍の頻度
-            if self.episode_count % (self.save_rate / 10) == 0:
+            # if self.episode_count % (self.save_rate / 10) == 0:
+            if (time.time() - self.t_last_print) >= 10 * 60:
                 mean_rew = np.mean(self.episode_rewards[-self.save_rate // 10 : -1])
                 self._run.log_scalar('traning.episode_reward', mean_rew)
                 for ag_idx in range(self.n_agents):
                     mean_ag_rew = np.mean(self.agent_rewards[ag_idx][:-self.save_rate//10:-1])
                     self._run.log_scalar('traning.ep_rew_ag{}'.format(ag_idx), mean_ag_rew)
-
-
-
-            if self.episode_count % self.save_rate == 0:
+            # if self.episode_count % self.save_rate == 0:
                 self.print_metrics()
                 self.calculate_means()
                 self.save_models(agents)
@@ -133,12 +132,13 @@ class RLLogger(object):
     def print_metrics(self):
         mean_episode_reward = round(np.mean(self.episode_rewards[-self.save_rate:-1]), 3)
         taken_time = time.time() - self.t_last_print
+        total_time= time.time() - self.t_start
         self.save_rate_time.append(taken_time)
         ave_time = np.mean(self.save_rate_time)
         time_left = self.convert((self.num_episodes - self.episode_count) / self.save_rate * ave_time)
         if self.n_adversaries == 0:
-            print('episodes: {}, mean episode reward: {}, time: {}, time left: {}'.format(
-                self.episode_count, mean_episode_reward, self.convert(taken_time), time_left))
+            print('episodes: {}, mean reward: {}, time: {}, total time: {}, time left: {}'.format(
+                self.episode_count, mean_episode_reward, self.convert(taken_time), self.convert(total_time) , time_left))
         else:
             print('steps: {}, episodes: {}, mean episode reward: {}, agent episode reward: {}, time: {}'.format(
                 self.train_step, self.episode_count, round(np.mean(self.episode_rewards[-self.save_rate:-1]), 3),
