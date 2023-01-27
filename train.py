@@ -56,9 +56,15 @@ else: print("Invalid value!"); sys.exit()
 
 
 scenario = f'stage3'
-load_dir = f"learned_results/stage3/any_Fs/no_cahnge_16h/1/models"
-save_dir = f"learned_results/stage3/any_Fs/4h_4-9Fs_final_no_R_back"
-learning_time = 10
+load_dir = f"learned_results/stage3/any_Fs/R_back/15h_4-9Fs/base/models"
+save_dir = f"learned_results/stage3/any_Fs/no_R_back/16h_4-9Fs"
+
+if scenario == "stage2":
+    learning_time = 5
+elif scenario == "stage3" and add_learning:
+    learning_time = 10
+elif scenario == "stage3" and not add_learning:
+    learning_time = 16
 ### set global variable ###
 
 # This file uses Sacred for logging purposes as well as for config management.
@@ -75,20 +81,27 @@ def train_config():
     if is_display or add_learning: restore_fp = load_dir
     else: restore_fp = None
     save_path = save_dir                                
-    save_rate = 500                # frequency to save policy as number of episodes
+    save_rate = 500              # frequency to save policy as number of episodes
+    num_eval_episodes = 1000
     
     # Environment
     scenario_name = scenario # environment name
-    num_eval_episodes = 500
     if scenario == "stage1":
         max_episode_len = 600           # timesteps per episodes
         num_episodes = 30000            # total episodes
     elif scenario == "stage2":
-        max_episode_len = 800           # timesteps per episodes
+        if not is_display:  # 学習時
+            max_episode_len = 800
+        else:
+            max_episode_len = 1000  # 評価時
         num_episodes = 30000
     else: 
-        max_episode_len = 800
-        num_episodes = 70000           # total episodes
+        if not is_display:  # 学習時
+            max_episode_len = 800
+        else:
+            max_episode_len = 1000  # 評価時
+        num_episodes = 70000
+    learning_time_log = learning_time
     
     # Agent Parameters
     good_policy = "maddpg"          # policy of "good" agents in env
@@ -147,6 +160,9 @@ def make_env(scenario_name) -> MultiAgentEnv:
 
     # load scenario from script
     scenario = scenarios.load(scenario_name + '.py').Scenario()
+    # 評価時はscenarioの環境も変える
+    if is_display:
+        scenario.is_learning = False
     # create world
     world = scenario.make_world()
     env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, done_callback = scenario.check_done)
@@ -228,8 +244,9 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
 
         if done:
             if display and not evaluate:
-                num_objs = [int(len(env.world.agents)), int(len(env.world.followers)), int(len(env.world.obstacles))]
-                logger.save_demo_result(pos_list, num_objs, env.reward_list_all)
+                obj_info = [int(len(env.world.agents)), int(len(env.world.followers)), int(len(env.world.obstacles)), env.world.obstacles[0].size]
+                dest_info = [env.dest, env.rho_g]
+                logger.save_demo_result(pos_list, obj_info, dest_info, env.reward_list_all)
                 pos_list.clear()
             if display and evaluate:
                 logger.save_eval_result(info_n, num_eval_episodes, save_movie)

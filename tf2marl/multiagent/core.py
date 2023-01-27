@@ -41,7 +41,7 @@ class Entity(object):
         # color
         self.color = None
         # max speed and accel
-        self.max_speed = 2.0
+        self.max_speed = 1.5
         self.accel = 7.5
         # state
         self.state = EntityState()
@@ -209,7 +209,8 @@ class Obstacle(Entity):
         self.have_goal = False
         self.max_speed = 0.5
         self.init_pos = np.array([0, 0])
-        self.max_range = 1.0
+        self.max_range = 1.25
+        # self.size = 0.3
     def set_vel(self):
         x_sign = -1. if np.random.rand() < 0.01 else 1.
         y_sign = -1. if np.random.rand() < 0.01 else 1.
@@ -238,8 +239,8 @@ class Obstacle_cross(Entity):
         if self.step < self.start_step:
             self.state.p_vel = np.array([0, 0])
         else:
-            # 0.3%の確率でゴールの位置を変更する
-            if not self.goal_changed and np.random.rand() <= 0.003:
+            # 1%の確率でゴールの位置を変更する
+            if not self.goal_changed and np.random.rand() <= 0.01:
                 y_rand = 3 * (2 * np.random.rand() - 1)
                 self.goal[1] += y_rand
                 self.goal_changed = True
@@ -362,7 +363,10 @@ class World(object):
                 # 位置を更新
                 obstacle.state.p_pos += obstacle.state.p_vel * self.dt
             elif obstacle.have_goal:
-                obstacle.speed = 0.3 + (2 * np.random.rand() - 1) * 0.1
+                vel_range = (2 * np.random.rand() - 1) * 0.1
+                # vel_range = (2 * np.random.rand() - 1) * 0.3
+                vel_range = np.clip(vel_range, -0.1, 0.3)
+                obstacle.speed = 0.3 + vel_range
                 # followerとのmin距離を計算
                 min_dis = np.inf
                 for F in self.followers:

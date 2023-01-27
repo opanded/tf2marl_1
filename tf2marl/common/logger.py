@@ -60,6 +60,7 @@ class RLLogger(object):
 
         self.save_rate = save_rate
         self.save_rate_time = []
+        self.learning_time = args["learning_time_log"]
         
         # for save mp4
         self.fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
@@ -109,11 +110,13 @@ class RLLogger(object):
         # rewardをplotする．
         result = self.final_ep_rewards
         fig = plt.figure(figsize=(12, 10))
-        ax = fig.add_subplot(111) 
-        x = np.arange(0, len(result) * 1000, 1000)
-        ax.plot(x, result, label= "mean reward")
-        ax.set_ylim(-10, 100)
-        ax.set_xlabel("episode", fontsize=24); ax.set_ylabel("mean reward", fontsize=24)
+        ax = fig.add_subplot(111)
+        # 時間のx軸を作成する
+        x = np.linspace(0, self.learning_time, len(result))
+        ax.plot(x, result)
+        # ax.set_ylim(-10, 100)
+        ax.set_xlabel("Time", fontsize=24); ax.set_ylabel("Mean reward", fontsize=24)
+        ax.grid()
         ax.legend()
         plt.tick_params(labelsize=18)
         fig.savefig(f"{self.ex_path}/reward_result.png")
@@ -163,14 +166,14 @@ class RLLogger(object):
     def get_sacred_results(self):
         return np.array(self.episode_rewards), np.array(self.agent_rewards)
     
-    def draw_pos_fig(self, pos_list, num_Ls, num_Fs, num_Os, save_dir):
+    def draw_pos_fig(self, pos_list, num_Ls, num_Fs, num_Os, O_size, dest, rho_g, save_dir):
         data_pos = np.array(pos_list)
         fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(1, 1, 1)
         mid_idx = int(len(data_pos) / 2)
         ax.set_xlim(-8.5, 8.5)
         ax.set_ylim(-5, 12.5)
-        goal = patches.Circle(xy=(0, 8), radius=1.25, fc='gray')
+        goal = patches.Circle(xy=dest, radius=rho_g, fc='gray')
         ax.add_patch(goal)
         # leader
         for i in range(num_Ls):
@@ -212,7 +215,7 @@ class RLLogger(object):
         # obstacle
         for k in range(num_Os):
             idx = ((num_Ls + num_Fs + 1) * 2) + k * 2 
-            radius = 0.075
+            radius = O_size
             col = "g"
             if k == 0:
                 ax.plot(list(data_pos[0:, idx]), list(data_pos[0:, idx + 1])
@@ -227,17 +230,21 @@ class RLLogger(object):
         ax.set_xlabel("x", fontsize=24); ax.set_ylabel("y", fontsize=24)
         ax.set_aspect('equal')
         ax.grid()
-        fig.legend(labelsize=18)
+        fig.legend(fontsize=18)
         fig.savefig(f"{save_dir}/positions.png")
         # plt.show() 
     
-    def save_demo_result(self, pos_list, num_objs, reward_list_all):
+    def save_demo_result(self, pos_list, obj_info, dest_info, reward_list_all):
         result_epi_dir = os.path.join(self.ex_path, "run_" + str(self.episode_count).zfill(2))
-        os.makedirs(result_epi_dir, exist_ok = True)             
-        # save mp4
+        os.makedirs(result_epi_dir, exist_ok = True)    
+        # save snapshot and moovie
+        idx1 = int(len(self.all_frames) / 3); idx2 = idx1 * 2 
         save = cv2.VideoWriter(str(result_epi_dir) + '/render.mp4', self.fourcc, 30.0, (600, 600))
-        for img in self.all_frames:
+        for i, img in enumerate(self.all_frames):
             img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            if (i == 0) or (i==idx1) or (i==idx2) or (i==len(self.all_frames)-1):
+                save_path = str(result_epi_dir) + f'/idx{i}.png'
+                cv2.imwrite(save_path, img)
             save.write(img)
         save.release()
         self.all_frames.clear()
@@ -248,7 +255,7 @@ class RLLogger(object):
         #         num_objs.append(0)
         #     pd.DataFrame([num_objs]).to_csv(pos_file, index=False, header= header) 
         #     pd.DataFrame(np.array(pos_list)).to_csv(pos_file, index=False, header= False)
-        self.draw_pos_fig(pos_list, *num_objs, result_epi_dir)
+        self.draw_pos_fig(pos_list, *obj_info, *dest_info, result_epi_dir)
         # save rewards
         result_rew_dir = os.path.join(result_epi_dir, "reward")
         os.makedirs(result_rew_dir, exist_ok = True)             
@@ -306,11 +313,11 @@ class RLLogger(object):
         elif "divide" in info_n:
             self._run.log_scalar('done_info', f"{self.episode_count}: divide")
             self.num_divide += 1
-        elif "exceed" in info_n:
-            self._run.log_scalar('done_info', f"{self.episode_count}: exceed")
-            self.num_exceed += 1
+        # elif "exceed" in info_n:
+        #     self._run.log_scalar('done_info', f"{self.episode_count}: exceed")
+        #     self.num_exceed += 1
         elif "collide" in info_n:
-            self._run.log_scalar('done_info', f"{self.episode_count}: exceed")
+            self._run.log_scalar('done_info', f"{self.episode_count}: collide")
             self.num_collide += 1
         else:
             self._run.log_scalar('done_info', f"{self.episode_count}: over")
@@ -318,14 +325,13 @@ class RLLogger(object):
         if self.episode_count + 1 >= num_eval_episodes:
             success_rate = 100 * self.num_success / (self.episode_count + 1)
             divide_rate = 100 * self.num_divide / (self.episode_count + 1)
-            exceed_rate = 100 * self.num_exceed / (self.episode_count + 1)
+            # exceed_rate = 100 * self.num_exceed / (self.episode_count + 1)
             collide_rate = 100 * self.num_collide / (self.episode_count + 1)
             over_rate = 100 * self.num_over / (self.episode_count + 1)
             self._run.log_scalar('done_info', 
-                                 f"success_rate: {success_rate}% divide_rate: {divide_rate}% collide_rate: {collide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
+                                 f"success_rate: {success_rate}% collide_rate: {collide_rate}% divide_rate: {divide_rate}%  over_rate: {over_rate}%")
             print(('done_info', 
-                  f"success_rate: {success_rate}% divide_rate: {divide_rate}% collide_rate: {collide_rate}% exceed_rate: {exceed_rate}% over_rate: {over_rate}%")
-)
+                  f"success_rate: {success_rate}% collide_rate: {collide_rate}% divide_rate: {divide_rate}% over_rate: {over_rate}%"))
     @property
     def cur_episode_reward(self):
         return self.episode_rewards[-1]

@@ -330,10 +330,12 @@ class MultiAgentEnv(gym.Env):
             if len(self.world.box) != 0:
                 self.render_geoms_xform[len(self.world.entities) + 2].set_translation(*center)
             # 障害物周りのmax_rangeの更新
+            count = 0
             for O in self.world.obstacles:
                 if O.have_vel:
+                    count += 1
                     pos = O.init_pos
-                    self.render_geoms_xform[-1].set_translation(*pos)
+                    self.render_geoms_xform[len(self.world.entities) + 2 + count].set_translation(*pos)
             # render to display or array
             results.append(self.viewers[i].render(return_rgb_array = mode =='rgb_array'))
         return results

@@ -18,6 +18,7 @@ class Scenario(BaseScenario):
         self.num_Fs = 6
         self.num_Os = random.choice([1, 2, 3])
         self.funcs = Basefuncs()
+        self.is_learning = True
     
     def make_world(self):
         world = World()
@@ -25,8 +26,7 @@ class Scenario(BaseScenario):
         world.agents = [Agent() for i in range(self.num_Ls)]
         for i, L in enumerate(world.agents):
             L.name = 'leader_%d' % i
-            if i == 0: L.color = np.array([1, 0, 0])
-            else: L.color = np.array([1, 0.5, 0])
+            L.color = np.array([1, 0, 0])
         # add Followers
         world.followers = [Follower() for i in range(self.num_Fs)]
         for i, F in enumerate(world.followers):
@@ -38,7 +38,6 @@ class Scenario(BaseScenario):
         self.max_dis_to_des = 12.5
         self.max_dis_to_agent = 7.5
         self.max_dis_to_O = 5. 
-        self.arc_len_max = world.followers[0].r_F["r4"] * (self.num_Fs - 1) * 2
         self.max_moving_dis = 2 * world.agents[0].max_speed * world.dt
         # リーダー入れ替え用の配列を用意
         self.rand_idx = [i for i in range(self.num_Ls)]
@@ -47,13 +46,16 @@ class Scenario(BaseScenario):
         return world
     
     def reset_world(self, world):
-        # # # フォロワの数をエピソード毎に変化させる
-        # self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
+        # set goal configration
+        if self.is_learning: self.rho_g = 1.1
+        else: self.rho_g = 1.25
+        self.des = np.array([0, 8])
+        
+        # フォロワの数をエピソード毎に変化させる
+        # if self.is_learning: self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
+        # else: self.num_Fs = 9
         # world.followers = [Follower() for i in range(self.num_Fs)]
         
-        # set goal configration
-        self.rho_g = 1.25
-        self.des = np.array([0, 8])
         # set initial object position
         self.F_pos = self.funcs._set_F_pos(world) 
         self.L_pos = self.funcs._set_L_pos(world, self.F_pos, self.num_Ls)
@@ -63,22 +65,23 @@ class Scenario(BaseScenario):
         #    tmp = self.L_pos[L_i]
         #    self.L_pos[L_i] = self.L_pos[L_j]
         #    self.L_pos[L_j] = tmp
-        
+        if self.is_learning:
+            if np.random.rand() <= 0.5: flag = 0
+            else: flag = 1
+        else: flag = 1
         # set obstacle configuration
-        # if np.random.rand() <= 0.5:
-        if np.random.rand() <= 1:
-            self.num_Os = random.choice([2, 3])
-            sit = "vibrating"
+        if flag == 0:  # crossing
+            if self.is_learning: self.num_Os = random.choice([1, 2])
+            else: self.num_Os = 2
+            world.obstacles = [Obstacle_cross() for i in range(self.num_Os)]
+            self.O_pos = self.funcs._set_crossing_O_pos(world, self.F_pos, self.des)
+        else:  # remain
+            if self.is_learning: self.num_Os = random.choice([2, 3])
+            else: self.num_Os = 3
             world.obstacles = [Obstacle() for i in range(self.num_Os)]
             self.O_pos = self.funcs._set_O_pos(world, self.F_pos, self.des)
             idx_list =[i for i in range(self.num_Os)]
-            idx = random.choice(idx_list)
-        else: 
-            self.num_Os = random.choice([1, 2])
-            # self.num_Os = 2
-            sit = "crossing"
-            world.obstacles = [Obstacle_cross() for i in range(self.num_Os)]
-            self.O_pos = self.funcs._set_crossing_O_pos(world, self.F_pos, self.des)
+            idx = random.choices(idx_list, k=self.num_Os)
         # set leader's random initial states
         for i, L in enumerate(world.agents):
             L.state.p_pos = self.L_pos[i]
@@ -93,19 +96,21 @@ class Scenario(BaseScenario):
         for i, O in enumerate(world.obstacles):
             O.name = 'obstacle_%d' % i
             O.state.p_pos = self.O_pos[i]
-            # O.size = 0.1
             O_to_COMs.append(LA.norm(O.state.p_pos - F_COM))
         # set obstacle's random initial states        
         for i, O in enumerate(world.obstacles):
-            if sit == "vibrating":
-                if i == idx: 
-                    O.have_vel = True
-                    O.init_pos = copy.deepcopy(self.O_pos[i])
-                    O.state.p_vel = np.array([0.2, 0.2])
-            else:
+            if flag == 0:  # crossing
                 close_id = np.argsort(O_to_COMs)
                 # O.start_step = close_id[i] * 125
                 O.start_step = close_id[i] * 0
+            else:  # remain
+                if i in idx: 
+                    O.have_vel = True
+                    O.init_pos = copy.deepcopy(self.O_pos[i])
+                    x_sign = 1 if np.random.rand() <= 0.5 else -1
+                    y_sign = 1 if np.random.rand() <= 0.5 else -1
+                    vel = 0.2
+                    O.state.p_vel = np.array([vel * x_sign, vel * y_sign])
         # for reward
         # ゴールから一番遠いフォロワの距離
         self.max_dis_old = 0; self.max_dis_idx_old = 0
@@ -190,11 +195,11 @@ class Scenario(BaseScenario):
         # if L_dis_to_des < self.dis_to_des:
         #     if L_dis_to_des < self.L_dis_to_des_old[L_idx]:
         #         self.R_back = - 0.05 * (self.dis_to_des - L_dis_to_des)
-        #     else: self.R_back = 0.01
+        #     else: self.R_back = 0
         # else: self.R_back = 0
         # self.L_dis_to_des_old[L_idx] = L_dis_to_des
         # self.R_back = np.clip(self.R_back, -0.05, 0.05)
-        self.R_back = 0      
+        self.R_back = 0
         # 衝突に関する報酬
         min_dis = self.funcs._calc_min_dis(L, world)
         if min_dis > 0:
@@ -219,7 +224,7 @@ class Scenario(BaseScenario):
             self.F_COM = self.funcs._calc_F_COM(world)
             self.COM_to_des = self.des - self.F_COM
             self.COM_to_des = self.funcs._coord_trans(self.COM_to_des)
-            self.COM_to_des[0] /= self.max_dis_to_des  # 距離の正規化
+            self.COM_to_des[0] /= self.max_dis_to_des if self.COM_to_des[0] <= self.max_dis_to_des else self.COM_to_des[0]
                        
             COM_to_Os = []; COM_to_Os_diff = []
             for idx, O in enumerate(world.obstacles):
@@ -299,13 +304,23 @@ class Scenario(BaseScenario):
         if self.min_dis_to_F > self.max_dis_to_agent: is_exceed_F = True
         else: is_exceed_F = False
         
-        if self.is_goal:
-            return True, "goal"
-        elif self.is_div:
-            return True, "divide"
-        # elif any(self.is_col_old):
-        #     return True, "collide"
-        elif is_exceed or is_exceed_F: 
-            return True, "exceed"
-        else: 
-            return False, "continue"
+        if self.is_learning:  # 学習時
+            if self.is_goal:
+                return True, "goal"
+            elif self.is_div:
+                return True, "divide"
+            elif any(self.is_col_old):
+                return True, "collide"
+            elif is_exceed or is_exceed_F: 
+                return True, "exceed"
+            else: 
+                return False, "continue"
+        else:  # 評価時
+            if self.is_goal:
+                return True, "goal"
+            elif self.is_div:
+                return True, "divide"
+            elif any(self.is_col_old):
+                return True, "collide"
+            else: 
+                return False, "continue"

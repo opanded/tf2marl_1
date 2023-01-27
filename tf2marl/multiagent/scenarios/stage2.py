@@ -18,6 +18,7 @@ class Scenario(BaseScenario):
         self.num_Fs = 6
         self.num_Os = random.choice([1, 2, 3])
         self.funcs = Basefuncs()
+        self.is_learning = True
     
     def make_world(self):
         world = World()
@@ -25,8 +26,7 @@ class Scenario(BaseScenario):
         world.agents = [Agent() for i in range(self.num_Ls)]
         for i, L in enumerate(world.agents):
             L.name = 'leader_%d' % i
-            if i == 0: L.color = np.array([1, 0, 0])
-            else: L.color = np.array([1, 0.5, 0])
+            L.color = np.array([1, 0, 0])
         # add Followers
         world.followers = [Follower() for i in range(self.num_Fs)]
         for i, F in enumerate(world.followers):
@@ -38,7 +38,6 @@ class Scenario(BaseScenario):
         self.max_dis_to_des = 12.5
         self.max_dis_to_agent = 7.5
         self.max_dis_to_O = 5. 
-        self.arc_len_max = world.followers[0].r_F["r4"] * (self.num_Fs - 1) * 2
         self.max_moving_dis = 2 * world.agents[0].max_speed * world.dt
         # リーダー入れ替え用の配列を用意
         self.rand_idx = [i for i in range(self.num_Ls)]
@@ -47,15 +46,18 @@ class Scenario(BaseScenario):
         return world
     
     def reset_world(self, world):
+        # set goal configration
+        if self.is_learning: self.rho_g = 1.1
+        else: self.rho_g = 1.25
+        self.des = np.array([0, 8])
+        
         # # フォロワの数をエピソード毎に変化させる
-        # self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
-        # world.followers = [Follower() for i in range(self.num_Fs)]
+        self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
+        world.followers = [Follower() for i in range(self.num_Fs)]
         # 障害物の数をエピソード毎に変化させる
         self.num_Os = random.choice([1, 2, 3])
         world.obstacles = [Obstacle() for i in range(self.num_Os)]
-        # set goal configration
-        self.rho_g = 1.1
-        self.des = np.array([0, 8])
+        
         # set initial object position
         self.F_pos = self.funcs._set_F_pos(world) 
         self.L_pos = self.funcs._set_L_pos(world, self.F_pos, self.num_Ls)
@@ -165,7 +167,7 @@ class Scenario(BaseScenario):
         if L_dis_to_des < self.dis_to_des:
             if L_dis_to_des < self.L_dis_to_des_old[L_idx]:
                 self.R_back = - 0.05 * (self.dis_to_des - L_dis_to_des)
-            else: self.R_back = 0.01
+            else: self.R_back = 0
         else: self.R_back = 0
         self.L_dis_to_des_old[L_idx] = L_dis_to_des
         self.R_back = np.clip(self.R_back, -0.05, 0.05)
@@ -194,7 +196,7 @@ class Scenario(BaseScenario):
             self.F_COM = self.funcs._calc_F_COM(world)
             self.COM_to_des = self.des - self.F_COM
             self.COM_to_des = self.funcs._coord_trans(self.COM_to_des)
-            self.COM_to_des[0] /= self.max_dis_to_des  # 距離の正規化
+            self.COM_to_des[0] /= self.max_dis_to_des if self.COM_to_des[0] <= self.max_dis_to_des else self.COM_to_des[0]
            
             COM_to_Os = []; COM_to_Os_diff = []
             for idx, O in enumerate(world.obstacles):
@@ -274,13 +276,26 @@ class Scenario(BaseScenario):
         if self.min_dis_to_F > self.max_dis_to_agent: is_exceed_F = True
         else: is_exceed_F = False
         
-        if self.is_goal:
-            return True, "goal"
-        elif self.is_div:
-            return True, "divide"
-        # elif any(self.is_col_old):
-        #     return True, "collide"
-        elif is_exceed or is_exceed_F: 
-            return True, "exceed"
-        else: 
-            return False, "continue"
+        # 学習時と評価時で終了条件を変える
+        if self.is_learning:
+            if self.is_goal:
+                return True, "goal"
+            elif self.is_div:
+                return True, "divide"
+            elif any(self.is_col_old):
+                return True, "collide"
+            elif is_exceed or is_exceed_F: 
+                return True, "exceed"
+            else: 
+                return False, "continue"
+        else:
+            if self.is_goal:
+                return True, "goal"
+            elif self.is_div:
+                return True, "divide"
+            elif any(self.is_col_old):
+                return True, "collide"
+            # elif is_exceed or is_exceed_F: 
+            #     return True, "exceed"
+            else: 
+                return False, "continue"
