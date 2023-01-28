@@ -363,10 +363,10 @@ class World(object):
                 # 位置を更新
                 obstacle.state.p_pos += obstacle.state.p_vel * self.dt
             elif obstacle.have_goal:
-                vel_range = (2 * np.random.rand() - 1) * 0.1
-                # vel_range = (2 * np.random.rand() - 1) * 0.3
-                vel_range = np.clip(vel_range, -0.1, 0.3)
-                obstacle.speed = 0.3 + vel_range
+                vel_range = (2 * np.random.rand() - 1) * 0.15
+                # vel_range = (2 * np.random.rand() - 1) * 0.25
+                obstacle.speed = 0.35 + vel_range
+                obstacle.speed = np.clip(obstacle.speed, 0.1, 0.6)
                 # followerとのmin距離を計算
                 min_dis = np.inf
                 for F in self.followers:

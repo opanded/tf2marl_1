@@ -18,7 +18,8 @@ class Scenario(BaseScenario):
         self.num_Fs = 6
         self.num_Os = random.choice([1, 2, 3])
         self.funcs = Basefuncs()
-        self.is_learning = True
+        self.is_display = False
+        self.is_evaluate = False
     
     def make_world(self):
         world = World()
@@ -47,13 +48,13 @@ class Scenario(BaseScenario):
     
     def reset_world(self, world):
         # set goal configration
-        if self.is_learning: self.rho_g = 1.1
+        if (not self.is_display) and (not self.is_evaluate): self.rho_g = 1.1
         else: self.rho_g = 1.25
         self.des = np.array([0, 8])
         
         # # フォロワの数をエピソード毎に変化させる
-        self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
-        world.followers = [Follower() for i in range(self.num_Fs)]
+        # self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
+        # world.followers = [Follower() for i in range(self.num_Fs)]
         # 障害物の数をエピソード毎に変化させる
         self.num_Os = random.choice([1, 2, 3])
         world.obstacles = [Obstacle() for i in range(self.num_Os)]
@@ -277,7 +278,7 @@ class Scenario(BaseScenario):
         else: is_exceed_F = False
         
         # 学習時と評価時で終了条件を変える
-        if self.is_learning:
+        if (not self.is_display) and (not self.is_evaluate):
             if self.is_goal:
                 return True, "goal"
             elif self.is_div:
@@ -295,7 +296,5 @@ class Scenario(BaseScenario):
                 return True, "divide"
             elif any(self.is_col_old):
                 return True, "collide"
-            # elif is_exceed or is_exceed_F: 
-            #     return True, "exceed"
             else: 
                 return False, "continue"

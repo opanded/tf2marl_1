@@ -21,7 +21,7 @@ class RLLogger(object):
         self.n_adversaries = n_adversaries
         
         # 学習時と実行時でフォルダを分ける
-        if not args["display"]:
+        if (not args["display"]) and (not args["evaluate"]):
             self.ex_path = os.path.join(args["save_path"], str(_run._id))
             os.makedirs(self.ex_path, exist_ok=True)
             self.model_path = os.path.join(self.ex_path, 'models')
@@ -73,7 +73,7 @@ class RLLogger(object):
         self.num_collide = 0
         self.num_over = 0
 
-    def record_episode_end(self, agents, display):
+    def record_episode_end(self, agents, display, evaluate):
         """
         Records an episode having ended.
         If save rate is reached, saves the models and prints some metrics.
@@ -84,7 +84,7 @@ class RLLogger(object):
         for ag_idx in range(self.n_agents):
             self.agent_rewards[ag_idx].append(0.0)
 
-        if not display:
+        if (not display) and (not evaluate):
             # episodeではなく10分おきに保存するようにする．
             # save_rateの10倍の頻度
             # if self.episode_count % (self.save_rate / 10) == 0:
@@ -231,30 +231,25 @@ class RLLogger(object):
         ax.set_aspect('equal')
         ax.grid()
         fig.legend(fontsize=18)
-        fig.savefig(f"{save_dir}/positions.png")
-        # plt.show() 
+        fig.savefig(f"{save_dir}/positions.png") 
     
     def save_demo_result(self, pos_list, obj_info, dest_info, reward_list_all):
         result_epi_dir = os.path.join(self.ex_path, "run_" + str(self.episode_count).zfill(2))
-        os.makedirs(result_epi_dir, exist_ok = True)    
-        # save snapshot and moovie
+        os.makedirs(result_epi_dir, exist_ok = True)
+        result_fig_dir = os.path.join(result_epi_dir, "snapshots")
+        os.makedirs(result_fig_dir, exist_ok = True)    
+        # save snapshot and movie
         idx1 = int(len(self.all_frames) / 3); idx2 = idx1 * 2 
         save = cv2.VideoWriter(str(result_epi_dir) + '/render.mp4', self.fourcc, 30.0, (600, 600))
         for i, img in enumerate(self.all_frames):
             img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             if (i == 0) or (i==idx1) or (i==idx2) or (i==len(self.all_frames)-1):
-                save_path = str(result_epi_dir) + f'/idx{i}.png'
+                save_path = str(result_fig_dir) + f'/idx{i}.png'
                 cv2.imwrite(save_path, img)
             save.write(img)
         save.release()
         self.all_frames.clear()
-        # save position           
-        # with open(f'{str(result_epi_dir)}/position.csv', 'w') as pos_file:
-        #     header = [i for i in range((num_objs[0] + num_objs[1] + num_objs[2] + 1) * 2)]
-        #     for j in range(len(header) - len(num_objs)):
-        #         num_objs.append(0)
-        #     pd.DataFrame([num_objs]).to_csv(pos_file, index=False, header= header) 
-        #     pd.DataFrame(np.array(pos_list)).to_csv(pos_file, index=False, header= False)
+        # draw position fig
         self.draw_pos_fig(pos_list, *obj_info, *dest_info, result_epi_dir)
         # save rewards
         result_rew_dir = os.path.join(result_epi_dir, "reward")
@@ -297,25 +292,12 @@ class RLLogger(object):
         plt.get_current_fig_manager().window.wm_geometry("+1200+0")
         plt.show()
         
-    def save_eval_result(self, info_n, num_eval_episodes, save_movie):          
-        if save_movie:
-            movie_dir = os.path.join(self.ex_path, "movie")
-            os.makedirs(movie_dir, exist_ok = True)   
-            # save mp4
-            save = cv2.VideoWriter(str(movie_dir) + '/render' + str(self.episode_count).zfill(2) + '.mp4', self.fourcc, 30.0, (850, 850))
-            for img in self.all_frames:
-                img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                save.write(img)
-            save.release()
-            self.all_frames.clear()
+    def save_eval_result(self, info_n, num_eval_episodes):          
         if "goal" in info_n:
             self.num_success += 1
         elif "divide" in info_n:
             self._run.log_scalar('done_info', f"{self.episode_count}: divide")
             self.num_divide += 1
-        # elif "exceed" in info_n:
-        #     self._run.log_scalar('done_info', f"{self.episode_count}: exceed")
-        #     self.num_exceed += 1
         elif "collide" in info_n:
             self._run.log_scalar('done_info', f"{self.episode_count}: collide")
             self.num_collide += 1
@@ -325,13 +307,11 @@ class RLLogger(object):
         if self.episode_count + 1 >= num_eval_episodes:
             success_rate = 100 * self.num_success / (self.episode_count + 1)
             divide_rate = 100 * self.num_divide / (self.episode_count + 1)
-            # exceed_rate = 100 * self.num_exceed / (self.episode_count + 1)
             collide_rate = 100 * self.num_collide / (self.episode_count + 1)
             over_rate = 100 * self.num_over / (self.episode_count + 1)
             self._run.log_scalar('done_info', 
                                  f"success_rate: {success_rate}% collide_rate: {collide_rate}% divide_rate: {divide_rate}%  over_rate: {over_rate}%")
-            print(('done_info', 
-                  f"success_rate: {success_rate}% collide_rate: {collide_rate}% divide_rate: {divide_rate}% over_rate: {over_rate}%"))
+            print(f"success_rate: {success_rate}% collide_rate: {collide_rate}% divide_rate: {divide_rate}% over_rate: {over_rate}%")
     @property
     def cur_episode_reward(self):
         return self.episode_rewards[-1]

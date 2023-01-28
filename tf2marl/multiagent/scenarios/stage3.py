@@ -18,7 +18,8 @@ class Scenario(BaseScenario):
         self.num_Fs = 6
         self.num_Os = random.choice([1, 2, 3])
         self.funcs = Basefuncs()
-        self.is_learning = True
+        self.is_display = False
+        self.is_evaluate = False
     
     def make_world(self):
         world = World()
@@ -47,37 +48,35 @@ class Scenario(BaseScenario):
     
     def reset_world(self, world):
         # set goal configration
-        if self.is_learning: self.rho_g = 1.1
+        if (not self.is_display) and (not self.is_evaluate): self.rho_g = 1.1
         else: self.rho_g = 1.25
         self.des = np.array([0, 8])
         
         # フォロワの数をエピソード毎に変化させる
-        # if self.is_learning: self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
-        # else: self.num_Fs = 9
-        # world.followers = [Follower() for i in range(self.num_Fs)]
+        if (not self.is_display) or self.is_evaluate:  # 学習時 or 評価時 
+          self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
+        else: self.num_Fs = 9
+        world.followers = [Follower() for i in range(self.num_Fs)]
         
         # set initial object position
         self.F_pos = self.funcs._set_F_pos(world) 
         self.L_pos = self.funcs._set_L_pos(world, self.F_pos, self.num_Ls)
-        # # 一定の確率でリーダーのポジションを入れ替える
-        # L_i = random.choice(self.rand_idx); L_j = random.choice(self.rand_idx)
-        # if L_i != L_j:
-        #    tmp = self.L_pos[L_i]
-        #    self.L_pos[L_i] = self.L_pos[L_j]
-        #    self.L_pos[L_j] = tmp
-        if self.is_learning:
+        
+        if (not self.is_display) and (not self.is_evaluate):  # 学習時 
             if np.random.rand() <= 0.5: flag = 0
             else: flag = 1
-        else: flag = 1
+        else: flag = 0
         # set obstacle configuration
         if flag == 0:  # crossing
-            if self.is_learning: self.num_Os = random.choice([1, 2])
-            else: self.num_Os = 2
+            if (not self.is_display) or self.is_evaluate:  # 学習時 or 評価時 
+                self.num_Os = random.choice([1, 2])
+            else: self.num_Os = 2  # rendering時
             world.obstacles = [Obstacle_cross() for i in range(self.num_Os)]
             self.O_pos = self.funcs._set_crossing_O_pos(world, self.F_pos, self.des)
         else:  # remain
-            if self.is_learning: self.num_Os = random.choice([2, 3])
-            else: self.num_Os = 3
+            if (not self.is_display) or self.is_evaluate:  # 学習時 or 評価時  
+                self.num_Os = random.choice([2, 3])
+            else: self.num_Os = 3  # rendering時
             world.obstacles = [Obstacle() for i in range(self.num_Os)]
             self.O_pos = self.funcs._set_O_pos(world, self.F_pos, self.des)
             idx_list =[i for i in range(self.num_Os)]
@@ -190,16 +189,15 @@ class Scenario(BaseScenario):
         else: self.R_L_close = 0
         self.min_dis_to_F_old[L_idx] = self.min_dis_to_F
         self.R_L_close = np.clip(self.R_L_close, -0.2, 0.1)
-        # # リーダーが後ろ側に回り込むための報酬 
-        # L_dis_to_des = LA.norm(self.des - L.state.p_pos)  
-        # if L_dis_to_des < self.dis_to_des:
-        #     if L_dis_to_des < self.L_dis_to_des_old[L_idx]:
-        #         self.R_back = - 0.05 * (self.dis_to_des - L_dis_to_des)
-        #     else: self.R_back = 0
-        # else: self.R_back = 0
-        # self.L_dis_to_des_old[L_idx] = L_dis_to_des
-        # self.R_back = np.clip(self.R_back, -0.05, 0.05)
-        self.R_back = 0
+        # リーダーが後ろ側に回り込むための報酬 
+        L_dis_to_des = LA.norm(self.des - L.state.p_pos)  
+        if L_dis_to_des < self.dis_to_des:
+            if L_dis_to_des < self.L_dis_to_des_old[L_idx]:
+                self.R_back = - 0.05 * (self.dis_to_des - L_dis_to_des)
+            else: self.R_back = 0
+        else: self.R_back = 0
+        self.L_dis_to_des_old[L_idx] = L_dis_to_des
+        self.R_back = np.clip(self.R_back, -0.05, 0.05)
         # 衝突に関する報酬
         min_dis = self.funcs._calc_min_dis(L, world)
         if min_dis > 0:
@@ -304,7 +302,8 @@ class Scenario(BaseScenario):
         if self.min_dis_to_F > self.max_dis_to_agent: is_exceed_F = True
         else: is_exceed_F = False
         
-        if self.is_learning:  # 学習時
+        # 学習時と評価時で終了条件を変える
+        if (not self.is_display) and (not self.is_evaluate):
             if self.is_goal:
                 return True, "goal"
             elif self.is_div:
@@ -315,7 +314,7 @@ class Scenario(BaseScenario):
                 return True, "exceed"
             else: 
                 return False, "continue"
-        else:  # 評価時
+        else:
             if self.is_goal:
                 return True, "goal"
             elif self.is_div:

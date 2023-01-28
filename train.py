@@ -36,28 +36,24 @@ if input == 0:
     is_display = False
     is_evaluate = False
     add_learning = False
-    is_save_movie = False
 elif input == 1: 
     is_display = False
     is_evaluate = False
     add_learning = True
-    is_save_movie = False
 elif input == 2: 
     is_display = True
     is_evaluate = False
     add_learning = False
-    is_save_movie = True
 elif input == 3: 
-    is_display = True
+    is_display = False
     is_evaluate = True
     add_learning = False
-    is_save_movie = False
 else: print("Invalid value!"); sys.exit()
 
 
 scenario = f'stage3'
-load_dir = f"learned_results/stage3/any_Fs/R_back/15h_4-9Fs/base/models"
-save_dir = f"learned_results/stage3/any_Fs/no_R_back/16h_4-9Fs"
+load_dir = f"learned_results/stage3/any_Fs/R_back/16h_6Fs/base/models"
+save_dir = f"learned_results/stage3/any_Fs/16h_4-9Fs"
 
 if scenario == "stage2":
     learning_time = 5
@@ -75,14 +71,13 @@ def train_config():
     # Logging
     exp_name = 'default'            # name for logging
 
-    save_movie = is_save_movie
     display = is_display
     evaluate = is_evaluate
-    if is_display or add_learning: restore_fp = load_dir
+    if add_learning or display or evaluate: restore_fp = load_dir
     else: restore_fp = None
     save_path = save_dir                                
     save_rate = 500              # frequency to save policy as number of episodes
-    num_eval_episodes = 1000
+    num_eval_episodes = 500
     
     # Environment
     scenario_name = scenario # environment name
@@ -160,9 +155,10 @@ def make_env(scenario_name) -> MultiAgentEnv:
 
     # load scenario from script
     scenario = scenarios.load(scenario_name + '.py').Scenario()
-    # 評価時はscenarioの環境も変える
-    if is_display:
-        scenario.is_learning = False
+    if is_display:  # rendring
+        scenario.is_display = True
+    if is_evaluate:  # evaluate
+        scenario.is_evaluate = True
     # create world
     world = scenario.make_world()
     env = MultiAgentEnv(world, scenario.reset_world, scenario.reward, scenario.observation, done_callback = scenario.check_done)
@@ -172,7 +168,7 @@ def make_env(scenario_name) -> MultiAgentEnv:
 @train_ex.main
 def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
           hard_max, max_episode_len, num_episodes, num_eval_episodes,
-          save_movie, batch_size, update_rate, use_target_action):
+          batch_size, update_rate, use_target_action):
     """
     This is the main training function, which includes the setup and training loop.
     It is meant to be called automatically by sacred, but can be used without it as well.
@@ -243,49 +239,44 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
             logger.agent_rewards[ag_idx][-1] += rew
 
         if done:
-            if display and not evaluate:
+            if display:
                 obj_info = [int(len(env.world.agents)), int(len(env.world.followers)), int(len(env.world.obstacles)), env.world.obstacles[0].size]
                 dest_info = [env.dest, env.rho_g]
                 logger.save_demo_result(pos_list, obj_info, dest_info, env.reward_list_all)
                 pos_list.clear()
-            if display and evaluate:
-                logger.save_eval_result(info_n, num_eval_episodes, save_movie)
+            if evaluate:
+                logger.save_eval_result(info_n, num_eval_episodes)
                 
             obs_n = env.reset()
-            logger.record_episode_end(agents, display)
-
+            logger.record_episode_end(agents, display, evaluate)
         logger.train_step += 1
 
         # policy updates
-        train_cond = not display and not evaluate
+        train_cond = (not display) and (not evaluate)  # rendering時でも評価時でもない時
         for agent in agents:
             if train_cond and len(agent.replay_buffer) > batch_size * max_episode_len:
                 if logger.train_step % update_rate == 0:  # only update every 100 steps
                     q_loss, pol_loss = agent.update(agents, logger.train_step)
 
-        # for displaying learned policies
-        if display:
-            if not evaluate:
-                time.sleep(0.025)
-            if save_movie:
-                img = env.render('rgb_array')[0]
-                logger.all_frames.append(img)
-                # 各step毎のオブジェクトの位置を保存
-                pos_list_1_step = []
-                for L in env.world.agents:
-                    pos_list_1_step.append(L.state.p_pos)
-                F_sum = np.array([0., 0.])
-                for F in env.world.followers:
-                    pos_list_1_step.append(F.state.p_pos)
-                    F_sum += F.state.p_pos
-                F_COM = F_sum / len(env.world.followers)
-                pos_list_1_step.append(F_COM)
-                for O in env.world.obstacles:
-                    pos_list_1_step.append(O.state.p_pos)
-                pos_list.append(np.concatenate(pos_list_1_step))
-            if evaluate and len(logger.episode_rewards) > num_eval_episodes:
-                logger.experiment_end()
-                return None
+        if display:  # rendering
+            img = env.render('rgb_array')[0]
+            logger.all_frames.append(img)
+            # 各step毎のオブジェクトの位置を保存
+            pos_list_1_step = []
+            for L in env.world.agents:
+                pos_list_1_step.append(L.state.p_pos)
+            F_sum = np.array([0., 0.])
+            for F in env.world.followers:
+                pos_list_1_step.append(F.state.p_pos)
+                F_sum += F.state.p_pos
+            F_COM = F_sum / len(env.world.followers)
+            pos_list_1_step.append(F_COM)
+            for O in env.world.obstacles:
+                pos_list_1_step.append(O.state.p_pos)
+            pos_list.append(np.concatenate(pos_list_1_step))
+            time.sleep(0.025)
+        if evaluate and len(logger.episode_rewards) > num_eval_episodes:  # evaluate
+            return None
         # saves logger outputs to a file similar to the way in the original MADDPG implementation
         if len(logger.episode_rewards) > num_episodes or (time.time() - logger.t_start) >= 3600 * learning_time:
             logger.experiment_end()
