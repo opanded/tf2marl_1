@@ -24,68 +24,57 @@ evaluate -> 指定したモデルを読み込んで，評価を行う．指定�
 
 ## ディレクトリ構造
 ```
-.
-├── README.md
-├── pip.txt
-├── example_setting: settingの例
-│   └── setting.json
-└── scripts
-    ├── __init__.py
-    ├── detect_convey.py: 前処理用のスクリプト
-    ├── detect_alpha.py: alphaを決定するスクリプト
-    ├── main_integurated.py: 検出，デバッグの全てが統合されたスクリプト
-    ├── setting.json
-    └── libs: クラス等がまとまっているフォルダ
-      ├── magicEyeAPI.py
-      ├── dataDriveFunc.py
-      ├── measureDimensionFunc.py
-      └── pointcloudFunc.py
+MADDPG_avoid_obstacles/
+├── .gitignore
+├── Dockerfile
+├── graph_plot.py
+├── readme.md
+├── requirements.txt
+├── reward_plot.py
+├── learned_results/
+|   └── 学習結果が保存される．
+├── tf2marl/
+│   ├── __init__.py
+│   ├── agents/: アルゴリズム, layerを変更する場合はここのクラスを変更する．
+│   │   ├── AbstractAgent.py
+│   │   ├── __init__.py
+│   │   ├── mad3pg.py
+│   │   ├── maddpg.py
+│   │   ├── masac.py
+│   │   └── matd3.py
+│   ├── common/: replay_bufferとそれに関連するクラス．layerを変更するとき以外いじらない．
+│   │   ├── __init__.py
+│   │   ├── logger.py
+│   │   ├── replay_buffer.py
+│   │   ├── segment_tree.py
+│   │   ├── test_envs/
+│   │   │   └── identity_env.py
+│   │   └── util.py
+│   └── multiagent/: MPE(シミュレーション環境)，自分の問題設定に合わせて変更する．
+│       ├── __init__.py
+│       ├── core.py: 学習対象のagent, follower, obstacleなどのクラスが記述されている．問題設定に応じて変更．
+│       ├── environment.py: MultiAgentEnvクラスが記述されている．
+│       ├── multi_discrete.py
+│       ├── policy.py
+│       ├── rendering.py
+│       ├── scenario.py
+│       └── scenarios/: 自分の問題設定に応じてシナリオを作成する．私の場合stage1~3を使用．
+│           ├── __init__.py
+│           ├── base_funcs.py: シナリオのコードが長くなりすぎたので，このファイルに必要な関数等をまとめた．
+│           ├── others/: サンプルのシナリオ
+│           │   ├── inversion.py
+│           │   ├── maximizeA2.py
+│           │   ├── simple.py
+│           │   ├── simple_adversary.py
+│           │   ├── simple_crypto.py
+│           │   ├── simple_push.py
+│           │   ├── simple_reference.py
+│           │   ├── simple_speaker_listener.py
+│           │   ├── simple_spread.py
+│           │   ├── simple_tag.py
+│           │   └── simple_world_comm.py
+│           ├── stage1.py
+│           ├── stage2.py
+│           └── stage3.py
+└── train.py
 ```
-
-## TensorFlow 2 Implementation of Multi-Agent Reinforcement Learning Approaches 
-
-This repository contains a modular TF2 implementations of multi-agent versions of the RL methods DDPG 
-([MADDPG](https://arxiv.org/abs/1706.02275)),
- TD3 ([MATD3](https://arxiv.org/abs/1910.01465)),
- [SAC](https://arxiv.org/abs/1801.01290) (MASAC) and
- [D4PG](https://arxiv.org/abs/1804.08617) (MAD4PG).
- It also implements [prioritized experience replay](https://arxiv.org/abs/1511.05952).
- 
- In our experiments we found MATD3 to work the best and did not see find a benefit by using Soft-Actor-Critic
- or the distributional D4PG. However, it is possible that these methods may be benefitial in more
- complex environments, while our evaluation here focussed on the 
- [multiagent-particle-envs by openai](https://github.com/openai/multiagent-particle-envs).
-
-## Code Structure
-We provide the code for the agents in tf2marl/agents and a finished training loop with logging
-powered by sacred in train.py.
-
-We denote lists of variables corresponding to each agent with the suffix `_n`, i.e.
-`state_n` contains a list of n state batches, one for each agent. 
-
-## Useage
-
-Use `python >= 3.6` and install the requirement with
-```
-pip install -r requirements.txt
-```
-Start an experiment with 
-```
-python train.py
-```
-As we use [sacred](https://github.com/IDSIA/sacred) for configuration management and logging, 
-the configuration can be updated with their CLI, i.e.
-```
-python train.py with scenario_name='simple_spread' num_units=128 num_episodes=10000
-```
-and experiments are automatically logged to `results/sacred/`, or optionally also to a MongoDB.
-To observe this database we recommend to use [Omniboard](https://github.com/vivekratnavel/omniboard).
-
- 
-## Acknowledgement
-The environments in `/tf2marl/multiagent` are from [multiagent-particle-envs by openai](https://github.com/openai/multiagent-particle-envs)
-with the exception of `inversion.py` and `maximizeA2.py`, which I added for debugging purposes.
-
-The implementation of the segment tree used for prioritized replay is based on 
-[stable-baselines](https://github.com/hill-a/stable-baselines)
-
