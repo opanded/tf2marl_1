@@ -36,10 +36,10 @@ class RLLogger(object):
             else:
                 self.ex_path = os.path.join(args["restore_fp"].replace('/models', ''), "demo", str(_run._id))
             os.makedirs(self.ex_path, exist_ok=True)
-            self.tb_path = os.path.join(self.ex_path, 'tb_logs')
-            os.makedirs(self.tb_path, exist_ok=True)
-            self.tb_writer = tf.summary.create_file_writer(self.tb_path)
-            self.tb_writer.set_as_default()
+            # self.tb_path = os.path.join(self.ex_path, 'tb_logs')
+            # os.makedirs(self.tb_path, exist_ok=True)
+            # self.tb_writer = tf.summary.create_file_writer(self.tb_path)
+            # self.tb_writer.set_as_default()
 
         # save arguments
         args_file_name = os.path.join(self.ex_path, 'args.pkl')
@@ -166,7 +166,7 @@ class RLLogger(object):
     def get_sacred_results(self):
         return np.array(self.episode_rewards), np.array(self.agent_rewards)
     
-    def draw_pos_fig(self, pos_list, num_Ls, num_Fs, num_Os, O_size, dest, rho_g, save_dir):
+    def draw_pos_fig(self, pos_list, num_Ls, num_Fs, num_Os, dest, rho_g, Os_info, save_dir):
         data_pos = np.array(pos_list)
         fig = plt.figure(figsize=(12, 10))
         ax = fig.add_subplot(1, 1, 1)
@@ -213,9 +213,14 @@ class RLLogger(object):
         F_COM_mid = patches.Rectangle(xy=(data_pos[mid_idx, idx], data_pos[mid_idx, idx + 1]), width=0.15, height=0.15, fc=col)
         ax.add_patch(F_COM_ini); ax.add_patch(F_COM_mid); ax.add_patch(F_COM_fi)
         # obstacle
-        for k in range(num_Os):
+        for k, O in enumerate(Os_info):
+            # remain環境について
+            if O.have_vel:
+                O_range = patches.Circle(xy=O.init_pos, radius=O.max_range, fc="lightgreen")
+                ax.add_patch(O_range)
+            # trajectoryのplot
             idx = ((num_Ls + num_Fs + 1) * 2) + k * 2 
-            radius = O_size
+            radius = O.size
             col = "g"
             if k == 0:
                 ax.plot(list(data_pos[0:, idx]), list(data_pos[0:, idx + 1])
@@ -233,7 +238,7 @@ class RLLogger(object):
         fig.legend(fontsize=18)
         fig.savefig(f"{save_dir}/positions.png") 
     
-    def save_demo_result(self, pos_list, obj_info, dest_info, reward_list_all):
+    def save_demo_result(self, pos_list, obj_info, dest_info, Os_info, reward_list_all):
         result_epi_dir = os.path.join(self.ex_path, "run_" + str(self.episode_count).zfill(2))
         os.makedirs(result_epi_dir, exist_ok = True)
         result_fig_dir = os.path.join(result_epi_dir, "snapshots")
@@ -250,7 +255,7 @@ class RLLogger(object):
         save.release()
         self.all_frames.clear()
         # draw position fig
-        self.draw_pos_fig(pos_list, *obj_info, *dest_info, result_epi_dir)
+        self.draw_pos_fig(pos_list, *obj_info, *dest_info, Os_info, result_epi_dir)
         # save rewards
         result_rew_dir = os.path.join(result_epi_dir, "reward")
         os.makedirs(result_rew_dir, exist_ok = True)             

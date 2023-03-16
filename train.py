@@ -52,7 +52,7 @@ else: print("Invalid value!"); sys.exit()
 
 
 scenario = f'stage3'
-load_dir = f"learned_results/stage3/any_Fs/R_back/16h_6Fs/base/models"
+load_dir = f"learned_results/stage3/any_Fs/16h_6Fs/representative/models"
 save_dir = f"learned_results/stage3/any_Fs/16h_4-9Fs"
 
 if scenario == "stage2":
@@ -77,7 +77,7 @@ def train_config():
     else: restore_fp = None
     save_path = save_dir                                
     save_rate = 500              # frequency to save policy as number of episodes
-    num_eval_episodes = 500
+    num_eval_episodes = 1000
     
     # Environment
     scenario_name = scenario # environment name
@@ -240,9 +240,10 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
 
         if done:
             if display:
-                obj_info = [int(len(env.world.agents)), int(len(env.world.followers)), int(len(env.world.obstacles)), env.world.obstacles[0].size]
+                obj_info = [int(len(env.world.agents)), int(len(env.world.followers)), int(len(env.world.obstacles))]
                 dest_info = [env.dest, env.rho_g]
-                logger.save_demo_result(pos_list, obj_info, dest_info, env.reward_list_all)
+                Os_info = [O for O in env.world.obstacles]
+                logger.save_demo_result(pos_list, obj_info, dest_info, Os_info, env.reward_list_all)
                 pos_list.clear()
             if evaluate:
                 logger.save_eval_result(info_n, num_eval_episodes)
@@ -376,7 +377,7 @@ def main():
     # use this code to attach a mongo database for logging
     # mongo_observer = MongoObserver(url='localhost:27017', db_name='sacred')
     # train_ex.observers.append(mongo_observer)
-    if not is_display: 
+    if (not is_display) and (not is_evaluate): 
         # file_observer = FileStorageObserver(os.path.join('learned_results', scenario))
         file_observer = FileStorageObserver(os.path.join(save_dir))
     else:

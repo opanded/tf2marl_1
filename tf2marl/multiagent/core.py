@@ -210,10 +210,10 @@ class Obstacle(Entity):
         self.max_speed = 0.5
         self.init_pos = np.array([0, 0])
         self.max_range = 1.25
-        # self.size = 0.3
+        self.size = 0.3
     def set_vel(self):
-        x_sign = -1. if np.random.rand() < 0.01 else 1.
-        y_sign = -1. if np.random.rand() < 0.01 else 1.
+        x_sign = -1. if np.random.rand() < 0.0075 else 1.
+        y_sign = -1. if np.random.rand() < 0.0075 else 1.
         if LA.norm(self.state.p_pos - self.init_pos) >= self.max_range:
             x_sign = -1.
             y_sign = -1.

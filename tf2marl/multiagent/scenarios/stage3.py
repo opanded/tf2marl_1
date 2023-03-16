@@ -53,10 +53,10 @@ class Scenario(BaseScenario):
         self.des = np.array([0, 8])
         
         # フォロワの数をエピソード毎に変化させる
-        if (not self.is_display) or self.is_evaluate:  # 学習時 or 評価時 
-          self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
-        else: self.num_Fs = 9
-        world.followers = [Follower() for i in range(self.num_Fs)]
+        # if (not self.is_display) or self.is_evaluate:  # 学習時 or 評価時 
+        #   self.num_Fs = random.choice([4, 5, 6, 7, 8, 9])
+        # else: self.num_Fs = 9
+        # world.followers = [Follower() for i in range(self.num_Fs)]
         
         # set initial object position
         self.F_pos = self.funcs._set_F_pos(world) 
@@ -65,7 +65,7 @@ class Scenario(BaseScenario):
         if (not self.is_display) and (not self.is_evaluate):  # 学習時 
             if np.random.rand() <= 0.5: flag = 0
             else: flag = 1
-        else: flag = 0
+        else: flag = 1
         # set obstacle configuration
         if flag == 0:  # crossing
             if (not self.is_display) or self.is_evaluate:  # 学習時 or 評価時 
