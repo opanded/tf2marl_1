@@ -1,8 +1,48 @@
-[![Build Status](https://travis-ci.com/JohannesAck/tf2multiagentrl.svg?branch=master)](https://travis-ci.com/JohannesAck/tf2multiagentrl)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/f047411b259245f28c60095cc8e44250)](https://app.codacy.com/gh/JohannesAck/tf2multiagentrl?utm_source=github.com&utm_medium=referral&utm_content=JohannesAck/tf2multiagentrl&utm_campaign=Badge_Grade)
-[![Codacy Badge](https://app.codacy.com/project/badge/Coverage/caf7f96ddc1d4bc6871d3999bfc63ecc)](https://www.codacy.com/gh/JohannesAck/tf2multiagentrl/dashboard?utm_source=github.com&utm_medium=referral&utm_content=JohannesAck/tf2multiagentrl&utm_campaign=Badge_Coverage)
+# Multiple robots avoid dynamic obstacles using model made by MADDPG
 
-# TensorFlow 2 Implementation of Multi-Agent Reinforcement Learning Approaches 
+本レポジトリは[tf2multiagentrl](https://github.com/JohannesAck/tf2multiagentrl)をフォークし改良したものである．
+環境構築等は上記のリポジトリに従う．
+
+## 実行例
+ルートディレクトリにおいて
+```
+python3 train.py
+```
+を実行．
+```
+input val[0 -> train, 1 -> add_learning, 2 -> display, 3 -> evaluate]:
+```
+と出力されるので適切な数字を入力する．
+ここで
+```
+train -> 0から学習を行う
+add_learning -> 指定したモデルを読み込んで，追加で学習を行う
+display -> 指定したモデルを読み込んで，実行を行う．この際動画が表示される
+evaluate -> 指定したモデルを読み込んで，評価を行う．指定した回数分試行し何回成功したかを記録する．
+```
+である．
+
+## ディレクトリ構造
+```
+.
+├── README.md
+├── pip.txt
+├── example_setting: settingの例
+│   └── setting.json
+└── scripts
+    ├── __init__.py
+    ├── detect_convey.py: 前処理用のスクリプト
+    ├── detect_alpha.py: alphaを決定するスクリプト
+    ├── main_integurated.py: 検出，デバッグの全てが統合されたスクリプト
+    ├── setting.json
+    └── libs: クラス等がまとまっているフォルダ
+      ├── magicEyeAPI.py
+      ├── dataDriveFunc.py
+      ├── measureDimensionFunc.py
+      └── pointcloudFunc.py
+```
+
+## TensorFlow 2 Implementation of Multi-Agent Reinforcement Learning Approaches 
 
 This repository contains a modular TF2 implementations of multi-agent versions of the RL methods DDPG 
 ([MADDPG](https://arxiv.org/abs/1706.02275)),

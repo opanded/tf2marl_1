@@ -1,11 +1,6 @@
-"""
-This file can be used to train an agent on a given environment, i.e. to replicate some
-results from the papers.
-"""
-
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # ここを指定すると一つだけのgpuで計算を行うことができる．
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 # os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from typing import List
 import sys

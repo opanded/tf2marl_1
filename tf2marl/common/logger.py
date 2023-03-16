@@ -294,7 +294,7 @@ class RLLogger(object):
                 ax_list[2 * idx + 1].plot(x, reward_list[idx], lw=2)    
         fig.legend()
         fig.savefig(f"{result_epi_dir}/result.png")
-        plt.get_current_fig_manager().window.wm_geometry("+1200+0")
+        # plt.get_current_fig_manager().window.wm_geometry("+1200+0")
         plt.show()
         
     def save_eval_result(self, info_n, num_eval_episodes):          
