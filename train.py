@@ -1,7 +1,7 @@
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-# os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from typing import List
 import sys
 
