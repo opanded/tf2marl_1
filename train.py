@@ -47,7 +47,7 @@ else: print("Invalid value!"); sys.exit()
 
 
 scenario = f'stage3'
-load_dir = f"learned_results/stage3/any_Fs/16h_4-9Fs/2/models"
+load_dir = f"learned_results/stage3/any_Fs/16h_4-9Fs/3/models"
 save_dir = f"learned_results/stage3/any_Fs/16h_4-9Fs"
 
 if scenario == "stage2":

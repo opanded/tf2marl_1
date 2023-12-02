@@ -37,7 +37,7 @@ MADDPG_avoid_obstacles/
 ├── reward_plot.py
 ├── learned_results/
 |   └── 保存学习结果
-├── tf2marl/
+├── tf2marl/: 包含各种智能体的代码。
 │   ├── __init__.py
 │   ├── agents/: 要改变算法、layer时，先改变这里的类。
 │   │   ├── AbstractAgent.py
