@@ -1,7 +1,12 @@
 # 简介
 
 本项目是改自[MADDPG_avoid_obstacles](https://github.com/takumi-web/MADDPG_avoid_obstacles)，即[tf2multiagentrl](https://github.com/JohannesAck/tf2multiagentrl)的分支项目。
-环境构建遵循[tf2multiagentrl]，但是略作改进。
+环境构建遵循[tf2multiagentrl]，但是略作改进，我更新了pip依赖项的表单和构建conda环境的yaml文件，当然我的工作流建立在 **WIN11 + WSL2 with Docker + Image with Conda + Container with biulded envs**这样的结构上，你可能需要根据需求去做更改。
+
+# 原始项目简介
+该存储库包含RL方法DDPG ([MADDPG](https://arxiv.org/abs/1706.02275))、TD3 ([MATD3](https://arxiv.org/abs/1910.01465))、SAC ([MASAC](https://arxiv.org/abs/1801.01290))和D4PG ([MAD4PG](https://arxiv.org/abs/1804.08617))的多智能体版本的模块化TF2实现。它还实现了[优先体验回放](https://arxiv.org/abs/1511.05952)。
+
+在[tf2multiagentrl](https://github.com/JohannesAck/tf2multiagentrl)的实验中，他们发现MATD3效果最好，并没有发现使用SAC或DD4PG有什么好处。然而，这些方法可能在更复杂的环境中有益，而我们在这里的评估主要集中在openai的[multiagent-particle-envs](https://github.com/openai/multiagent-particle-envs)上。
 
 # 示例
 在根目录中
