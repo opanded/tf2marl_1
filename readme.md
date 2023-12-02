@@ -1,28 +1,27 @@
-# Multiple robots avoid dynamic obstacles using model made by MADDPG
+# 简介
 
-本レポジトリは[tf2multiagentrl](https://github.com/JohannesAck/tf2multiagentrl)をフォークし改良したものである．
-環境構築等は上記のリポジトリに従う．
+本项目是改自[MADDPG_avoid_obstacles](https://github.com/takumi-web/MADDPG_avoid_obstacles)，即[tf2multiagentrl](https://github.com/JohannesAck/tf2multiagentrl)的分支项目。
+环境构建遵循[tf2multiagentrl]，但是略作改进。
 
-## 実行例
-ルートディレクトリにおいて
+# 示例
+在根目录中
 ```
 python3 train.py
 ```
-を実行．
+执行主程序，在终端会显示如下的操作选项，同时也是用户端程序执行的流程：
 ```
 input val[0 -> train, 1 -> add_learning, 2 -> display, 3 -> evaluate]:
 ```
-と出力されるので適切な数字を入力する．
-ここで
+在这里输入需要进行执行的阶段的对应的数字。
+在这里对每个阶段略作解释：
 ```
-train -> 0から学習を行う
-add_learning -> 指定したモデルを読み込んで，追加で学習を行う
-display -> 指定したモデルを読み込んで，実行を行う．この際動画が表示される
-evaluate -> 指定したモデルを読み込んで，評価を行う．指定した回数分試行し何回成功したかを記録する．
+train           ->     从头开始训练模型。
+add_learning    ->     读入指定的模型，追加进行学习。
+display         ->     读入指定的模型进行执行，显示视频。
+evaluate        ->     加载指定的模型并进行评估。记录在指定的分钟数内尝试和成功的次数。
 ```
-である．
 
-## ディレクトリ構造
+# 目录结构
 ```
 MADDPG_avoid_obstacles/
 ├── .gitignore
@@ -32,17 +31,17 @@ MADDPG_avoid_obstacles/
 ├── requirements.txt
 ├── reward_plot.py
 ├── learned_results/
-|   └── 学習結果が保存される．
+|   └── 保存学习结果
 ├── tf2marl/
 │   ├── __init__.py
-│   ├── agents/: アルゴリズム, layerを変更する場合はここのクラスを変更する．
+│   ├── agents/: 要改变算法、layer时，先改变这里的类。
 │   │   ├── AbstractAgent.py
 │   │   ├── __init__.py
 │   │   ├── mad3pg.py
 │   │   ├── maddpg.py
 │   │   ├── masac.py
 │   │   └── matd3.py
-│   ├── common/: replay_bufferとそれに関連するクラス．layerを変更するとき以外いじらない．
+│   ├── common/: replay_buffer及其相关类。只有在更改layer的时候才会摆弄。除了变更 layer 的时候以外不要乱动。
 │   │   ├── __init__.py
 │   │   ├── logger.py
 │   │   ├── replay_buffer.py
@@ -50,18 +49,18 @@ MADDPG_avoid_obstacles/
 │   │   ├── test_envs/
 │   │   │   └── identity_env.py
 │   │   └── util.py
-│   └── multiagent/: MPE(シミュレーション環境)，自分の問題設定に合わせて変更する．
+│   └── multiagent/: MPE(仿真环境)，根据您的问题设置进行更改。
 │       ├── __init__.py
-│       ├── core.py: 学習対象のagent, follower, obstacleなどのクラスが記述されている．問題設定に応じて変更．
-│       ├── environment.py: MultiAgentEnvクラスが記述されている．
+│       ├── core.py: 描述了诸如agent, follower, obstacle等的类。根据问题设置进行更改。
+│       ├── environment.py: 描述了 MultiAgentEnv 类。
 │       ├── multi_discrete.py
 │       ├── policy.py
 │       ├── rendering.py
 │       ├── scenario.py
-│       └── scenarios/: 自分の問題設定に応じてシナリオを作成する．私の場合stage1~3を使用．
+│       └── scenarios/: 根据您的问题设置创建一个方案。原作者设计的stage1~3。
 │           ├── __init__.py
-│           ├── base_funcs.py: シナリオのコードが長くなりすぎたので，このファイルに必要な関数等をまとめた．
-│           ├── others/: サンプルのシナリオ
+│           ├── base_funcs.py: 由于这个场景的代码太长，我们为这个文件收集了必要的函数和其他东西。
+│           ├── others/: 样本场景。
 │           │   ├── inversion.py
 │           │   ├── maximizeA2.py
 │           │   ├── simple.py
