@@ -2,7 +2,7 @@ import numpy as np
 from numpy import linalg as LA
 import random
 
-# physical/external base state of all entites
+# 所有实体的物理/外部基本状态
 class EntityState(object):
     def __init__(self):
         # physical position
@@ -10,14 +10,14 @@ class EntityState(object):
         # physical velocity
         self.p_vel = None
 
-# state of agents (including communication and internal/mental state)
+# 智能体状态 (including communication and internal/mental state)
 class AgentState(EntityState):
     def __init__(self):
         super(AgentState, self).__init__()
         # communication utterance
         self.c = None
 
-# action of the agent
+# 智能体动作
 class Action(object):
     def __init__(self):
         # physical action
@@ -25,7 +25,7 @@ class Action(object):
         # communication action
         self.c = None
 
-# properties and state of physical world entity
+# 物理世界实体的性质和状态
 class Entity(object):
     def __init__(self):
         # name 
@@ -52,7 +52,7 @@ class Entity(object):
     def mass(self):
         return self.initial_mass
 
-# properties of agent entities, リーダーを表している
+# 智能体实体的属性, 代表着leader
 class Agent(Entity):
     def __init__(self):
         super(Agent, self).__init__()
@@ -77,28 +77,28 @@ class Agent(Entity):
         # define front or not
         self.front = False
 
-# Entityクラスを継承したFollwerクラスを作成
+# 创建继承 Entity 类的 Follwer 类
 class Follower(Entity):
     def __init__(self):
         super(Follower, self).__init__()
-        # フォロワの基準距離
+        # 跟随者的基准距离
         self.r_F = {"r1": 0.2, "r2": 0.3, "r3": 0.45, "r4": 0.6, "r5": 0.8}
-        # リーダーの基準距離
+        # 领导者的基准距离
         self.r_L = {"r1d": 0.2, "r2d":  0.5, "r5d": 1.0}
-        # 微小な値
+        # 微小的值
         self.delta = 10e-2
-        # フォロワ間作用の係数
+        # Follwer 之间的作用系数
         self.k_FF_coh = 2; self.k_FF_col = 3; self.k_FF_bar = 100;
-        # リーダーフォロワ間の係数
+        # Follwer 和 Leader 之间的系数
         self.k_FL_col = 2; self.k_FL_bar = 100;   
-        # フォロワ-障害物間作用の係数
+        # Follwer-障碍物之间的系数
         self.k_Fland_coh = 0; self.k_Fland_col = 3; self.k_Fland_bar = 100;
-        # フォロワのrendering時の色
+        # Follwer 在渲染时的颜色
         self.color = np.array([0, 0, 1])
         self.id = 0
         
     def __calc_vec_FF(self, followers):
-        # フォロワiに対するフォロワjと障害物の相対ベクトルの取得
+        # Follwer i 相对于 Follwer j 和障碍物的相对向量的获得
         vec_FFs = []
         for follower in followers:
             if follower == self: continue
@@ -108,10 +108,10 @@ class Follower(Entity):
         return vec_FFs
     
     def __calc_vec_FOs(self, obstacles):
-        # フォロワiに対する障害物の相対ベクトルの取得
+        # Follwer i 相对于 障碍物的相对向量的获得
         vec_FOs = []
         for O in obstacles:
-            # 障害物は表面から力を受けるようにする
+            # 让障碍物从表面受到力
             norm = LA.norm(O.state.p_pos - self.state.p_pos)
             vec_F_O = (O.state.p_pos - self.state.p_pos) / norm * (norm - O.size)
             vec_FOs.append(vec_F_O)
@@ -119,7 +119,7 @@ class Follower(Entity):
         return vec_FOs
     
     def __calc_vec_FL(self, leaders):
-        # フォロワiに対するリーダーjの相対ベクトルの取得
+        # Follwer i 相对于 Leader j 的相对向量的获得
         vec_FLs = []
         for leader in leaders:
             vec_FL = leader.state.p_pos - self.state.p_pos
@@ -197,10 +197,10 @@ class Follower(Entity):
         vec_FLs = self.__calc_vec_FL(agents)
         final_vel_FF = self.__calc_vel_FF(vec_FFs, vec_Flands)
         final_vel_FL = self.__calc_vel_FL(vec_FLs)
-        # followerの入力
+        # follower 的输入
         self.state.p_vel =  final_vel_FF + final_vel_FL
         
-# 静止，その場で動くobstacle
+# 静止，原地移动的 obstacle（障碍）
 class Obstacle(Entity):
     def __init__(self):
         super(Obstacle, self).__init__()
@@ -221,7 +221,7 @@ class Obstacle(Entity):
         self.state.p_vel[1] *= y_sign
         self.state.p_vel = self.state.p_vel.clip(-self.max_speed, self.max_speed)
 
-# crossingするobstacle
+# 穿越障碍 crossing obstacle
 class Obstacle_cross(Entity):
     def __init__(self):
         super(Obstacle_cross, self).__init__()
@@ -235,16 +235,16 @@ class Obstacle_cross(Entity):
         self.have_vel = False
         self.have_goal = True
     def set_vel(self):
-        # start_stepまでは待機
+        # start_step之前需要等待
         if self.step < self.start_step:
             self.state.p_vel = np.array([0, 0])
         else:
-            # 1%の確率でゴールの位置を変更する
+            # 有1% 的机会改变目标的位置
             if not self.goal_changed and np.random.rand() <= 0.01:
                 y_rand = 3 * (2 * np.random.rand() - 1)
                 self.goal[1] += y_rand
                 self.goal_changed = True
-            # goalまで一定速度で進む      
+            # 以一定的速度前进到 goal      
             unit_vec = (self.goal - self.state.p_pos) / LA.norm(self.goal - self.state.p_pos)
             self.state.p_vel = self.speed * unit_vec
         self.step += 1
@@ -259,15 +259,15 @@ class World(object):
         self.followers = []
         # obstacles
         self.obstacles = []
-        # communication channel dimensionality
+        # communication channel 维度
         self.dim_c = 0
-        # position dimensionality
+        # position 维度
         self.dim_p = 2
-        # color dimensionality
+        # color 维度
         self.dim_color = 3
         # simulation timestep -> 25FPS
         self.dt = 0.035
-        # physical damping -> バネ、ダンパーのダンパー,速度の減衰具合を表す
+        # physical damping -> 弹簧，阻尼器阻尼器，表示速度的衰减程度
         self.damping = 0.25
         # contact response parameters
         self.contact_force = 1e+2
@@ -340,7 +340,7 @@ class World(object):
 
     # integrate physical state
     def __integrate_state(self, p_force):
-        # leaderの位置を更新
+        # leader 的位置更新
         for i, leader in enumerate(self.agents):
             if not leader.movable: continue
             leader.state.p_vel = leader.state.p_vel * (1 - self.damping)
@@ -352,29 +352,29 @@ class World(object):
                     leader.state.p_vel = leader.state.p_vel / np.sqrt(np.square(leader.state.p_vel[0]) +
                                                                     np.square(leader.state.p_vel[1])) * leader.max_speed
             leader.state.p_pos += leader.state.p_vel * self.dt
-        # followerの位置を更新
+        # follower 的位置更新
         for i, follower in enumerate(self.followers):
             follower.calc_follower_input(self.agents, self.followers, self.obstacles)
             follower.state.p_pos += follower.state.p_vel * self.dt
-        # obstacleの位置を更新
+        # obstacle 的位置更新
         for i, obstacle in enumerate(self.obstacles):
             if obstacle.have_vel:
                 obstacle.set_vel()
-                # 位置を更新
+                # 位置更新
                 obstacle.state.p_pos += obstacle.state.p_vel * self.dt
             elif obstacle.have_goal:
                 vel_range = (2 * np.random.rand() - 1) * 0.15
                 # vel_range = (2 * np.random.rand() - 1) * 0.25
                 obstacle.speed = 0.35 + vel_range
                 obstacle.speed = np.clip(obstacle.speed, 0.1, 0.6)
-                # followerとのmin距離を計算
+                # 计算和 follower 的最小距离
                 min_dis = np.inf
                 for F in self.followers:
                     dis = LA.norm(F.state.p_pos - obstacle.state.p_pos) - obstacle.size
                     if dis < min_dis: min_dis = dis
                 # if min_dis <= 1: obstacle.speed /= 2
                 obstacle.set_vel()
-                # 位置を更新
+                # 位置更新
                 obstacle.state.p_pos += obstacle.state.p_vel * self.dt    
             
     def __update_agent_state(self, agent):
@@ -396,7 +396,7 @@ class World(object):
         p_force = self.__apply_action_force(p_force)
         # apply environment forces
         p_force = self.__apply_environment_force(p_force)
-        # integrate physical state -> ここでポジション更新
+        # integrate physical state -> 此处更新位置
         self.__integrate_state(p_force)
         # update agent state
         for agent in self.agents:

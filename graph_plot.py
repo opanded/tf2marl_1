@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.patches as patches
 
 if __name__ == '__main__':
-    # CSVファイルをUTF-8形式で読み込む
+    # 以UTF-8格式读取CSV文件
     # for i in range(3):
     #     data_des = pd.read_csv(f'./result/dis_to_des_{i}.csv',encoding = 'UTF8')
     #     data_agent = pd.read_csv(f'./result/dis_to_agent_{i}.csv',encoding = 'UTF8')
@@ -28,7 +28,7 @@ if __name__ == '__main__':
             
     #         ax1.plot(x, des_y_data[j], label=f"agent{j}")
     #         ax2.plot(x, agent_y_data[j])
-    #     # 横線
+    #     # 横线
     #     ax1.hlines(0.4, -100, 100, colors='blue', linestyle='dashed'); ax1.hlines(0.25, -100, 100, colors='red', linestyle='dashed'); ax1.hlines(0.15, -100, 100, colors='green', linestyle='dashed'); ax1.hlines(0.55, -100, 100, colors='green', linestyle='dashed')
     #     ax2.hlines(0.4, -100, 100, colors='blue', linestyle='dashed'); ax2.hlines(0.25, -100, 100, colors='red', linestyle='dashed') ; ax2.hlines(0.15, -100, 100, colors='green', linestyle='dashed'); ax2.hlines(0.55, -100, 100, colors='green', linestyle='dashed')
     #     fig.legend()
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     #     ax.legend()
     #     plt.tick_params(labelsize=18)
     #     plt.show()
-    # CSVファイルをUTF-8形式で読み込む
+    # 以UTF-8格式读取CSV文件
     path = "learned_results/stage3/any_Fs/R_back_16h/1/demo/2/run_00/position.csv"
     data_pos = pd.read_csv(path ,encoding = 'UTF8')
     num_Ls = int(data_pos.iat[0, 0]); num_Fs = int(data_pos.iat[0, 1]); num_Os = int(data_pos.iat[0, 2])
