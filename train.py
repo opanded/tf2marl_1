@@ -43,7 +43,7 @@ elif input == 3:
     is_display = False
     is_evaluate = True
     add_learning = False
-else: print("Invalid value!"); sys.exit()
+else: print("无效值"); sys.exit()
 
 
 scenario = f'stage3'
