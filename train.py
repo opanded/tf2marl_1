@@ -1,6 +1,6 @@
 import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 # os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 from typing import List
 import sys
@@ -46,9 +46,9 @@ elif input == 3:
 else: print("无效值"); sys.exit()
 
 
-scenario = f'stage3'
-load_dir = f"learned_results/stage3/any_Fs/16h_4-9Fs/3/models"
-save_dir = f"learned_results/stage3/any_Fs/16h_4-9Fs"
+scenario = f'stage2'
+load_dir = f"learned_results/{scenario}/10/models"
+save_dir = f"learned_results/{scenario}"
 
 if scenario == "stage2":
     learning_time = 5
@@ -96,9 +96,9 @@ def train_config():
     # Agent Parameters
     good_policy = "maddpg"          # policy of "good" agents in env
     adv_policy = 'matd3'           # policy of adversary agents in env
-    # available agent: maddpg, matd3, mad3pg, masac
+    # available agent: maddpg, matd3, mad3pg, masac # 时间原因这里不测试masac了，只做maddpg, matd3, mad3pg三种算法的交叉对比，一共九组。
 
-    # General Training Hyperparameters
+    # 一般训练超参数
     lr = 1e-3                       # learning rate for critics and policies
     gamma = 0.975                   # decay used in environments
     batch_size = 1024               # batch size for training
@@ -109,7 +109,7 @@ def train_config():
     update_rate = 100               # update policy after each x steps
     critic_zero_if_done = False     # set the value to zero in terminal steps
     buff_size = 5e6                # size of the replay buffer
-    # 学習が回らない場合は予め止める
+    # 学习不顺利时提前停止
     if buff_size <= batch_size * max_episode_len:
         print("Too big batch size!")
         sys.exit()
@@ -124,17 +124,17 @@ def train_config():
 
     # MATD3
     if good_policy == 'tf2marl':
-        policy_update_rate = 1      # Frequency of policy updates, compared to critic
+        policy_update_rate = 1      # 与评论家相比，策略更新的频率
     else:
         policy_update_rate = 2
-    critic_action_noise_stddev = 0.02  # Added noise in critic updates
-    action_noise_clip = 0.5         # limit for this noise
+    critic_action_noise_stddev = 0.02  # 在评论家更新中增加了噪音
+    action_noise_clip = 0.5         # 对噪音的限制
 
     # MASAC
-    entropy_coeff = 0.05            # weight for entropy in Soft-Actor-Critic
+    entropy_coeff = 0.05            # 软演员-评论家中熵的权重
 
     # MAD3PG
-    num_atoms = 51                  # number of atoms in support
+    num_atoms = 51                  # 支持的原子数量
     min_val = -400                  # minimum atom value
     max_val = 0                     # largest atom value
 
@@ -202,7 +202,7 @@ def train(_run, exp_name, save_rate, display, evaluate, restore_fp,
     obs_n = env.reset()
     pos_list = []
 
-    print('Starting iterations...')
+    print('开始迭代...')
     while True:
         # get action
         if use_target_action:

@@ -44,12 +44,12 @@ class Basefuncs():
 
     def _set_F_pos(self, world):
         F_pos = []
-        # 3台ずつ列状に並べる
+        # 每三台排成一列
         if len(world.followers) == 4:
             n = 2
         else:
             n = 3
-        m = -(-len(world.followers) // n) # m: 列数，演算子を用いて切り上げをしている
+        m = -(-len(world.followers) // n) # m: 列数，演算子を用いて切り上げをしている 使用列数、算子来进行升值
         F_ref_coord = np.array([5 * (2 * np.random.rand() - 1), (2 * np.random.rand() - 1)])
         F_width = world.followers[0].r_F["r4"]
         for i in range(m): 
@@ -86,15 +86,15 @@ class Basefuncs():
         else: sign = 1
         
         for i in range(len(world.obstacles)):
-            y_rand = 1 + np.random.rand()  # 学習環境
+            y_rand = 1 + np.random.rand()  # 学习环境
             # y_rand = -1 + 2 * np.random.rand()  # change_ini_pos
-            if sign == 0:  # 左側に初期配置，右側にゴール
+            if sign == 0:  # 左侧是初始位置，右侧是 goal 
                 O_next_coord = np.array([O_ref_coord[0] - (O_width - 2.0 * np.random.rand()), 
                                         O_ref_coord[1] + y_rand])
                 world.obstacles[i].goal = np.array([O_ref_coord[0] + O_width, 
                                                     O_ref_coord[1] - y_rand])
                 sign = 1
-            else:  # 右側に初期配置，左側にゴール
+            else:  # 右侧是初始位置，右侧是 goal
                 O_next_coord = np.array([O_ref_coord[0] + (O_width - 2.0 * np.random.rand()), 
                                         O_ref_coord[1] + y_rand])
                 world.obstacles[i].goal = np.array([O_ref_coord[0] - (0.6 * np.random.rand() + O_width), 
@@ -111,7 +111,7 @@ class Basefuncs():
         else: 
             L_width = world.followers[0].r_L["r5d"] * 2
         F_width = world.followers[0].r_F["r4"]
-        # 右側後方のフォロワを基準にする
+        # 以右后方的 follower 为基准
         back_L_pos = [(ini_dis_to_des + F_width + L_width) * np.array([np.cos(angle_des), np.sin(angle_des)])]
         # 2台目
         back_L_next_coord = np.array([back_L_pos[0][0] + 2 * F_width * np.sin(angle_des)\
@@ -182,7 +182,7 @@ class Basefuncs():
     
     def _calc_min_dis_to_F(self, agent, world):
         min_dis = np.inf
-        # followerとの距離取得してminの距離を返す
+        # follower 的距离的获取，返回最小的距离
         for F in world.followers:
             delta_pos = F.state.p_pos - agent.state.p_pos
             dist = LA.norm(delta_pos)
@@ -219,7 +219,7 @@ class Basefuncs():
         min_dis_to_O = np.inf
         for O in world.obstacles:
             for F in world.followers:
-                # 障害物表面からの距離を計算する
+                # 计算与障碍物表面的距离
                 F_to_O_dis = LA.norm(O.state.p_pos - F.state.p_pos) - O.size
                 if F_to_O_dis < min_dis_to_O: min_dis_to_O = F_to_O_dis
         min_dis_to_Os.append(min_dis_to_O)
