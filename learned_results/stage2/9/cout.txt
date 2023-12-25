@@ -1,0 +1,48 @@
+INFO - avoide_obstacle - Running command 'train'
+INFO - avoide_obstacle - Started run with ID "9"
+{'exp_name': 'default', 'display': False, 'evaluate': False, 'restore_fp': None, 'save_path': 'learned_results/stage2', 'save_rate': 500, 'num_eval_episodes': 1000, 'scenario_name': 'stage2', 'max_episode_len': 800, 'num_episodes': 30000, 'learning_time_log': 5, 'good_policy': 'masac', 'adv_policy': 'masac', 'lr': 0.001, 'gamma': 0.975, 'batch_size': 1024, 'num_layers': 2, 'num_units': 64, 'num_lstm_units': 16, 'update_rate': 100, 'critic_zero_if_done': False, 'buff_size': 5000000.0, 'tau': 0.01, 'hard_max': False, 'priori_replay': False, 'alpha': 0.6, 'beta': 0.5, 'use_target_action': True, 'policy_update_rate': 2, 'critic_action_noise_stddev': 0.02, 'action_noise_clip': 0.5, 'entropy_coeff': 0.05, 'num_atoms': 51, 'min_val': -400, 'max_val': 0, 'seed': 181564111}
+2023-12-20 08:24:26.448658: I tensorflow/core/platform/cpu_feature_guard.cc:142] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN)to use the following CPU instructions in performance-critical operations:  AVX2 FMA
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2023-12-20 08:24:26.462345: I tensorflow/core/platform/profile_utils/cpu_utils.cc:104] CPU Frequency: 2112000000 Hz
+2023-12-20 08:24:26.463740: I tensorflow/compiler/xla/service/service.cc:168] XLA service 0x557591004fd0 initialized for platform Host (this does not guarantee that XLA will be used). Devices:
+2023-12-20 08:24:26.463784: I tensorflow/compiler/xla/service/service.cc:176]   StreamExecutor device (0): Host, Default Version
+Using good policy masac and adv policy masac
+Starting iterations...
+episodes: 82, mean reward: -35.988, time: 0:10:01, total time: 0:10:01, time left: 10:00:03
+episodes: 250, mean reward: -35.823, time: 0:10:00, total time: 0:20:02, time left: 9:56:02
+episodes: 476, mean reward: -35.894, time: 0:10:00, total time: 0:30:02, time left: 9:51:17
+episodes: 698, mean reward: -35.716, time: 0:10:02, total time: 0:40:04, time left: 9:47:14
+episodes: 898, mean reward: -36.115, time: 0:10:01, total time: 0:50:06, time left: 9:43:13
+episodes: 1080, mean reward: -33.827, time: 0:10:01, total time: 1:00:07, time left: 9:39:32
+episodes: 1290, mean reward: -21.267, time: 0:10:00, total time: 1:10:08, time left: 9:35:18
+episodes: 1488, mean reward: -4.127, time: 0:10:02, total time: 1:20:10, time left: 9:31:32
+episodes: 1684, mean reward: 5.286, time: 0:10:01, total time: 1:30:11, time left: 9:27:34
+episodes: 1861, mean reward: 14.283, time: 0:10:01, total time: 1:40:13, time left: 9:24:02
+episodes: 2049, mean reward: 23.809, time: 0:10:01, total time: 1:50:15, time left: 9:20:19
+episodes: 2248, mean reward: 41.336, time: 0:10:00, total time: 2:00:15, time left: 9:16:13
+episodes: 2456, mean reward: 58.499, time: 0:10:00, total time: 2:10:16, time left: 9:12:01
+episodes: 2646, mean reward: 60.487, time: 0:10:01, total time: 2:20:17, time left: 9:08:12
+episodes: 2837, mean reward: 56.739, time: 0:10:02, total time: 2:30:19, time left: 9:04:26
+episodes: 3021, mean reward: 60.78, time: 0:10:01, total time: 2:40:21, time left: 9:00:45
+episodes: 3205, mean reward: 64.68, time: 0:10:02, total time: 2:50:23, time left: 8:57:09
+episodes: 3405, mean reward: 71.762, time: 0:10:00, total time: 3:00:24, time left: 8:53:05
+episodes: 3610, mean reward: 77.423, time: 0:10:00, total time: 3:10:24, time left: 8:48:57
+episodes: 3812, mean reward: 82.925, time: 0:10:01, total time: 3:20:26, time left: 8:44:54
+episodes: 4026, mean reward: 86.349, time: 0:10:01, total time: 3:30:28, time left: 8:40:38
+episodes: 4243, mean reward: 86.699, time: 0:10:02, total time: 3:40:31, time left: 8:36:21
+episodes: 4406, mean reward: 87.734, time: 0:10:03, total time: 3:50:34, time left: 8:33:08
+episodes: 4540, mean reward: 84.208, time: 0:10:04, total time: 4:00:38, time left: 8:30:33
+episodes: 4677, mean reward: 80.022, time: 0:10:02, total time: 4:10:40, time left: 8:27:49
+episodes: 4814, mean reward: 77.122, time: 0:10:01, total time: 4:20:41, time left: 8:25:03
+episodes: 4958, mean reward: 75.169, time: 0:10:00, total time: 4:30:41, time left: 8:22:08
+episodes: 5066, mean reward: 76.757, time: 0:10:03, total time: 4:40:45, time left: 8:20:02
+episodes: 5160, mean reward: 77.727, time: 0:10:00, total time: 4:50:46, time left: 8:18:06
+WARNING - matplotlib.legend - No handles with labels found to put in legend.
+...Finished total of 5232 episodes in 5:00:02.
+9
+INFO - avoide_obstacle - Result: (array([-33.82304071, -16.25225715, -28.39354936, ..., 127.95681223,
+        49.8891873 ,  50.15748141]), array([[-25.38335327,  -8.25225715, -20.39354936, ...,  66.68926401,
+         27.28944293,  25.51165091],
+       [ -8.43968745,  -8.        ,  -8.        , ...,  61.26754822,
+         22.59974437,  24.64583049]]))
+INFO - avoide_obstacle - Completed after 5:00:16

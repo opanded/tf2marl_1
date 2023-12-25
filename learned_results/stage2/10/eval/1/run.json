@@ -1,0 +1,188 @@
+{
+  "artifacts": [],
+  "command": "train",
+  "experiment": {
+    "base_dir": "/app/tf2marl_1",
+    "dependencies": [
+      "numpy==1.18.5",
+      "sacred==0.8.1",
+      "tensorflow==2.3.1"
+    ],
+    "mainfile": "train.py",
+    "name": "avoide_obstacle",
+    "repositories": [
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      },
+      {
+        "commit": "0109fdb5c18aede59c0e6a3440d58229aa53bbd6",
+        "dirty": true,
+        "url": "https://github.com/opanded/tf2marl_1"
+      }
+    ],
+    "sources": [
+      [
+        "tf2marl/__init__.py",
+        "_sources/__init___d41d8cd98f00b204e9800998ecf8427e.py"
+      ],
+      [
+        "tf2marl/agents/AbstractAgent.py",
+        "_sources/AbstractAgent_80c905362ae0eb744cb60a36b67e4284.py"
+      ],
+      [
+        "tf2marl/agents/__init__.py",
+        "_sources/__init___9a6daa8b314d3de07ce7c22c1c12d10c.py"
+      ],
+      [
+        "tf2marl/agents/mad3pg.py",
+        "_sources/mad3pg_67e18f39237730c3271ee9fb7b1c521f.py"
+      ],
+      [
+        "tf2marl/agents/maddpg.py",
+        "_sources/maddpg_2722dd475d6c53631a0f665766457b13.py"
+      ],
+      [
+        "tf2marl/agents/masac.py",
+        "_sources/masac_a4da4be13c06a0e1e2ec074a90b2610b.py"
+      ],
+      [
+        "tf2marl/agents/matd3.py",
+        "_sources/matd3_42b5b7bf96dcb72c2cae577dd432d359.py"
+      ],
+      [
+        "tf2marl/common/__init__.py",
+        "_sources/__init___d41d8cd98f00b204e9800998ecf8427e.py"
+      ],
+      [
+        "tf2marl/common/logger.py",
+        "_sources/logger_759697f88ad011dd800f68669f1a6ca6.py"
+      ],
+      [
+        "tf2marl/common/util.py",
+        "_sources/util_7dc340240c565a480b325a60613a6c5d.py"
+      ],
+      [
+        "tf2marl/multiagent/__init__.py",
+        "_sources/__init___5bd42acbde1ad76ba49d7937cab56f12.py"
+      ],
+      [
+        "tf2marl/multiagent/environment.py",
+        "_sources/environment_77a5035eebf185ef105ddd44cf17120d.py"
+      ],
+      [
+        "train.py",
+        "_sources/train_b36e94c7d60a6f669fc5476f306feaa6.py"
+      ]
+    ]
+  },
+  "heartbeat": "2023-12-20T21:10:00.582999",
+  "host": {
+    "ENV": {},
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700",
+    "gpus": {
+      "driver_version": "546.33",
+      "gpus": [
+        {
+          "model": "NVIDIA GeForce RTX 3060",
+          "persistence_mode": true,
+          "total_memory": 12288
+        }
+      ]
+    },
+    "hostname": "20723b6e5023",
+    "os": [
+      "Linux",
+      "Linux-5.15.133.1-microsoft-standard-WSL2-x86_64-with-glibc2.10"
+    ],
+    "python_version": "3.8.0"
+  },
+  "meta": {
+    "command": "train",
+    "options": {
+      "--beat-interval": null,
+      "--capture": null,
+      "--comment": null,
+      "--debug": false,
+      "--enforce_clean": false,
+      "--file_storage": null,
+      "--force": false,
+      "--help": false,
+      "--loglevel": null,
+      "--mongo_db": null,
+      "--name": null,
+      "--pdb": false,
+      "--print-config": false,
+      "--priority": null,
+      "--queue": false,
+      "--s3": null,
+      "--sql": null,
+      "--tiny_db": null,
+      "--unobserved": false,
+      "COMMAND": null,
+      "UPDATE": [],
+      "help": false,
+      "with": false
+    }
+  },
+  "resources": [],
+  "result": null,
+  "start_time": "2023-12-20T21:05:30.347282",
+  "status": "RUNNING"
+}
